@@ -44,6 +44,14 @@ void WowFlutterModule::Init(float sampleRate)
     readStateL_ = baseDelaySamplesL_;
     readStateR_ = baseDelaySamplesR_;
 
+    prevReadPosL_ = 0.0f;
+    prevReadPosR_ = 0.0f;
+
+    maxDeltaL_ = 0.0f;
+    maxDeltaR_ = 0.0f;
+    jumpCountL_ = 0;
+    jumpCountR_ = 0;
+
     randState_ ^= static_cast<uint32_t>(sampleRate_);
 }
 
@@ -206,6 +214,51 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         float readIndexR = static_cast<float>(writeIndex_) - readStateR_;
         if(readIndexL < 0.0f) readIndexL += static_cast<float>(delayBufSize_);
         if(readIndexR < 0.0f) readIndexR += static_cast<float>(delayBufSize_);
+
+        // Guard against large jumps in read position that cause impulses/clicks
+        // This prevents buffer wrap discontinuities that sound like bit-crushing
+        const float maxAllowedJump = 4.0f;  // samples
+
+        // Check left channel for discontinuities
+        float jumpDeltaL = readIndexL - prevReadPosL_;
+        // Handle wrap-around: if delta is huge, we wrapped
+        if(jumpDeltaL > static_cast<float>(delayBufSize_) / 2.0f) {
+            jumpDeltaL -= static_cast<float>(delayBufSize_);
+        } else if(jumpDeltaL < -static_cast<float>(delayBufSize_) / 2.0f) {
+            jumpDeltaL += static_cast<float>(delayBufSize_);
+        }
+
+        // Track maximum delta for debugging
+        float absJumpL = fabsf(jumpDeltaL);
+        if(absJumpL > maxDeltaL_) maxDeltaL_ = absJumpL;
+
+        if(absJumpL > maxAllowedJump) {
+            jumpCountL_++;
+            readIndexL = prevReadPosL_ + (jumpDeltaL > 0.0f ? maxAllowedJump : -maxAllowedJump);
+            if(readIndexL < 0.0f) readIndexL += static_cast<float>(delayBufSize_);
+            if(readIndexL >= static_cast<float>(delayBufSize_)) readIndexL -= static_cast<float>(delayBufSize_);
+        }
+        prevReadPosL_ = readIndexL;
+
+        // Check right channel for discontinuities
+        float jumpDeltaR = readIndexR - prevReadPosR_;
+        if(jumpDeltaR > static_cast<float>(delayBufSize_) / 2.0f) {
+            jumpDeltaR -= static_cast<float>(delayBufSize_);
+        } else if(jumpDeltaR < -static_cast<float>(delayBufSize_) / 2.0f) {
+            jumpDeltaR += static_cast<float>(delayBufSize_);
+        }
+
+        // Track maximum delta for debugging
+        float absJumpR = fabsf(jumpDeltaR);
+        if(absJumpR > maxDeltaR_) maxDeltaR_ = absJumpR;
+
+        if(absJumpR > maxAllowedJump) {
+            jumpCountR_++;
+            readIndexR = prevReadPosR_ + (jumpDeltaR > 0.0f ? maxAllowedJump : -maxAllowedJump);
+            if(readIndexR < 0.0f) readIndexR += static_cast<float>(delayBufSize_);
+            if(readIndexR >= static_cast<float>(delayBufSize_)) readIndexR -= static_cast<float>(delayBufSize_);
+        }
+        prevReadPosR_ = readIndexR;
 
         float delayedL = InterpolateCubic(delayBufL_.get(), delayBufSize_, readIndexL);
         float delayedR = InterpolateCubic(delayBufR_.get(), delayBufSize_, readIndexR);

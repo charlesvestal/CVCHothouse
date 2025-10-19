@@ -45,6 +45,16 @@ class WowFlutterModule
     float readStateR_   = 0.0f;
     float flutterJitL_  = 0.0f;
     float flutterJitR_  = 0.0f;
+
+    // Previous read positions for discontinuity detection
+    float prevReadPosL_ = 0.0f;
+    float prevReadPosR_ = 0.0f;
+
+    // Debug: track maximum deltas per channel
+    float maxDeltaL_ = 0.0f;
+    float maxDeltaR_ = 0.0f;
+    uint32_t jumpCountL_ = 0;
+    uint32_t jumpCountR_ = 0;
     static constexpr size_t kMaxDelaySamples = 2048;  // ~42ms at 48kHz, plenty for wow/flutter
     std::unique_ptr<float[]> delayBufL_;
     std::unique_ptr<float[]> delayBufR_;
