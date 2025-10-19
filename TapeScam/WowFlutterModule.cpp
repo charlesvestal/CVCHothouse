@@ -227,8 +227,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         fltPhaseL_ += flutterRateL_actual_ * invSr;
         if(fltPhaseL_ >= 1.0f) fltPhaseL_ -= 1.0f;
 
-        // Flutter waveform (no per-sample noise!)
-        flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
+        // Flutter waveform (jitter disabled - testing for aliasing)
+        // flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
         float flutterL = std::sin(kTwoPi * fltPhaseL_);
 
         // Flutter burst logic
@@ -247,14 +247,13 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
             }
         }
 
-        // Drift
-        float driftTargetL = kDriftScale * NextRandCentered();
-        driftL_ += kDriftCoeff * (driftTargetL - driftL_);
+        // Drift (disabled - testing for aliasing)
+        // float driftTargetL = kDriftScale * NextRandCentered();
+        // driftL_ += kDriftCoeff * (driftTargetL - driftL_);
 
-        // Combine modulations (using pre-calculated depths)
+        // Combine modulations (using pre-calculated depths, no jitter/drift)
         float devSecL = wowDepthL_actual_ * wowL
-                      + flutterDepthL_actual_ * burstAmountL_ * (flutterL + 0.35f * flutterJitL_)
-                      + driftL_;
+                      + flutterDepthL_actual_ * burstAmountL_ * flutterL;
 
         // --- RIGHT CHANNEL ---
 
@@ -269,8 +268,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         fltPhaseR_ += flutterRateR_actual_ * invSr;
         if(fltPhaseR_ >= 1.0f) fltPhaseR_ -= 1.0f;
 
-        // Flutter waveform (no per-sample noise!)
-        flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
+        // Flutter waveform (jitter disabled - testing for aliasing)
+        // flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
         float flutterR = std::sin(kTwoPi * fltPhaseR_);
 
         // Flutter burst logic
@@ -288,14 +287,13 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
             }
         }
 
-        // Drift
-        float driftTargetR = kDriftScale * NextRandCentered();
-        driftR_ += kDriftCoeff * (driftTargetR - driftR_);
+        // Drift (disabled - testing for aliasing)
+        // float driftTargetR = kDriftScale * NextRandCentered();
+        // driftR_ += kDriftCoeff * (driftTargetR - driftR_);
 
-        // Combine modulations (using pre-calculated depths)
+        // Combine modulations (using pre-calculated depths, no jitter/drift)
         float devSecR = wowDepthR_actual_ * wowR
-                      + flutterDepthR_actual_ * burstAmountR_ * (flutterR + 0.35f * flutterJitR_)
-                      + driftR_;
+                      + flutterDepthR_actual_ * burstAmountR_ * flutterR;
 
         devSecL = Clamp(devSecL, -kMaxDevSec, kMaxDevSec);
         devSecR = Clamp(devSecR, -kMaxDevSec, kMaxDevSec);
