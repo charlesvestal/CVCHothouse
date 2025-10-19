@@ -77,7 +77,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     }
 
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
-    const float levelDb   = -12.0f + levelKnob * 18.0f;
+    const float minLevelDb = -36.0f;
+    const float levelDb   = minLevelDb + levelKnob * (-minLevelDb);
     globalLevelTarget = powf(10.0f, levelDb / 20.0f);
     globalLevelCurrent += (globalLevelTarget - globalLevelCurrent) * kLevelSmooth;
 
