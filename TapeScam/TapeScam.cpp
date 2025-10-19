@@ -3,6 +3,7 @@
 #include "WowFlutterModule.h"
 #include "HissDropModule.h"
 #include "ToneModule.h"
+#include "ReverbModule.h"
 #include <algorithm>
 #include <cmath>
 #include "daisysp.h"
@@ -33,12 +34,21 @@ enum TapeSpeedMode
     SPEED_LOFI     = 2   // Corresponds to TOGGLESWITCH_DOWN
 };
 
+// Reverb/Ambience modes for Toggle Switch 3
+enum ReverbMode
+{
+    REV_OFF        = 0,  // Corresponds to TOGGLESWITCH_UP
+    REV_LIGHT_ROOM = 1,  // Corresponds to TOGGLESWITCH_MIDDLE
+    REV_PLATE_HALL = 2   // Corresponds to TOGGLESWITCH_DOWN
+};
+
 Hothouse         hw;
 GainStageModule  gainStage;
 TapeSatModule    tapeSat;
 WowFlutterModule tapeWobble;
 HissDropModule   tapeNoise;
-ToneModule      tapeTone;
+ToneModule       tapeTone;
+ReverbModule     reverb;
 Led              ledBypass;
 Led              ledBoost;
 
@@ -49,8 +59,9 @@ static float globalLevelCurrent = 0.707f;
 static constexpr float kLevelSmooth = 0.01f;
 
 // Toggle state tracking
-static TapeAgeMode currentAgeMode = AGE_USED;        // Default to Used tape
-static TapeSpeedMode currentSpeedMode = SPEED_STANDARD;  // Default to Standard speed
+static TapeAgeMode currentAgeMode = AGE_USED;          // Default to Used tape
+static TapeSpeedMode currentSpeedMode = SPEED_STANDARD;    // Default to Standard speed
+static ReverbMode currentReverbMode = REV_OFF;         // Default to Reverb Off
 
 // Separate parameter adjustments from each toggle (for proper accumulation/combination)
 static float ageHeadroomAdj_dB = -1.0f;   // Age mode headroom adjustment
@@ -238,12 +249,75 @@ void HandleTapeSpeedToggle()
     }
 }
 
+void HandleReverbToggle()
+{
+    // Read Toggle Switch 3 position
+    auto togglePos = hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3);
+
+    // Map toggle position to ReverbMode
+    ReverbMode revMode = REV_OFF;  // Safe default
+    switch(togglePos)
+    {
+        case Hothouse::TOGGLESWITCH_UP:
+            revMode = REV_OFF;
+            break;
+        case Hothouse::TOGGLESWITCH_MIDDLE:
+            revMode = REV_LIGHT_ROOM;
+            break;
+        case Hothouse::TOGGLESWITCH_DOWN:
+            revMode = REV_PLATE_HALL;
+            break;
+        case Hothouse::TOGGLESWITCH_UNKNOWN:
+        default:
+            revMode = REV_OFF;
+            break;
+    }
+
+    // Only update parameters if mode changed
+    if(revMode != currentReverbMode)
+    {
+        currentReverbMode = revMode;
+
+        // Define parameters for each reverb mode
+        float reverbMix;
+        float reverbDecayTime;
+
+        switch(revMode)
+        {
+            case REV_OFF:
+                reverbMix       = 0.0f;
+                reverbDecayTime = 0.0f;
+                break;
+
+            case REV_LIGHT_ROOM:
+                reverbMix       = 0.15f;  // 15% wet
+                reverbDecayTime = 1.0f;   // 1 second tail
+                break;
+
+            case REV_PLATE_HALL:
+                reverbMix       = 0.25f;  // 25% wet
+                reverbDecayTime = 3.0f;   // 3 second tail
+                break;
+
+            default:
+                reverbMix       = 0.0f;
+                reverbDecayTime = 0.0f;
+                break;
+        }
+
+        // Apply reverb parameters
+        reverb.SetMix(reverbMix);
+        reverb.SetDecayTime(reverbDecayTime);
+    }
+}
+
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     hw.ProcessAllControls();
     HandleFootswitches();
     HandleTapeAgeToggle();
     HandleTapeSpeedToggle();
+    HandleReverbToggle();
 
     auto params = BuildParams();
     gainStage.SetPendingParams(params);
@@ -262,12 +336,17 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     tapeTone.SetAmount(hw.GetKnobValue(Hothouse::KNOB_5));
     tapeTone.UpdateControls();
 
+    reverb.UpdateControls();
+
     if(!bypassEnabled)
     {
         tapeSat.Process(out, size);
         tapeWobble.Process(out, out, size);
         tapeNoise.Process(out, out, size);
         tapeTone.Process(out, out, size);
+
+        // Reverb after tone shaping, before global level
+        reverb.Process(out, out, size);
     }
 
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
@@ -337,6 +416,17 @@ int main()
 
     tapeTone.Init(sampleRateHz, 2);
     hw.seed.PrintLine("  - Tone OK");
+
+    hw.seed.PrintLine("Initializing reverb (this uses large buffers)...");
+    int reverbResult = reverb.Init(sampleRateHz);
+    if(reverbResult == 0)
+    {
+        hw.seed.PrintLine("  - Reverb OK");
+    }
+    else
+    {
+        hw.seed.PrintLine("  - Reverb FAILED! Error code: %d", reverbResult);
+    }
 
     hw.seed.PrintLine("Starting audio...");
     hw.StartAdc();
