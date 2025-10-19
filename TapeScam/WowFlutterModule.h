@@ -95,9 +95,9 @@ class WowFlutterModule
 
     static constexpr float kAmountSmooth = 0.005f;
     static constexpr float kDriftSmooth  = 0.0008f;
-    static constexpr float kDriftCoeff  = 0.0015f;
+    static constexpr float kDriftCoeff  = 0.00015f;  // 10× slower drift
     static constexpr float kDriftScale  = 0.0006f;
-    static constexpr float kJitterAlpha = 0.004f;
+    static constexpr float kJitterAlpha = 0.0004f;   // 10× slower jitter (50ms time constant)
     static constexpr float kMaxDevSec   = 0.0018f;
     static constexpr float kMaxDeltaSamples = 0.75f;
     static constexpr float kMinReadSec  = 0.0002f;

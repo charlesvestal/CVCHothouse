@@ -220,10 +220,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         wowPhaseL_ += wowRateL_actual_ * invSr;
         if(wowPhaseL_ >= 1.0f) wowPhaseL_ -= 1.0f;
 
-        // Wow waveform: mix sine + triangle (no per-sample noise!)
-        const float alpha = 0.2f;
-        float wowL = (1.0f - alpha) * std::sin(kTwoPi * wowPhaseL_)
-                   + alpha * TriangleWave(wowPhaseL_);
+        // Wow waveform: pure sine (triangle has sharp corners = harmonics = aliasing)
+        float wowL = std::sin(kTwoPi * wowPhaseL_);
 
         // Update flutter phase (using pre-calculated rate)
         fltPhaseL_ += flutterRateL_actual_ * invSr;
@@ -264,9 +262,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         wowPhaseR_ += wowRateR_actual_ * invSr;
         if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
 
-        // Wow waveform: mix sine + triangle (no per-sample noise!)
-        float wowR = (1.0f - alpha) * std::sin(kTwoPi * wowPhaseR_)
-                   + alpha * TriangleWave(wowPhaseR_);
+        // Wow waveform: pure sine (triangle has sharp corners = harmonics = aliasing)
+        float wowR = std::sin(kTwoPi * wowPhaseR_);
 
         // Update flutter phase (using pre-calculated rate)
         fltPhaseR_ += flutterRateR_actual_ * invSr;
