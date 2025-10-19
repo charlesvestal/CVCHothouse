@@ -183,13 +183,16 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     burstTimerL_ += static_cast<float>(size) * invSr;
     burstTimerR_ += static_cast<float>(size) * invSr;
 
-    // Smooth LFO modulation for organic variation (no discontinuities)
-    // Update LFO phases - very slow oscillators for warble
-    const float wowDepthLFORate = 0.03f;   // ~33 second cycle
-    const float wowRateLFORate = 0.07f;    // ~14 second cycle
-    const float flutterDepthLFORate = 0.11f;  // ~9 second cycle
-    const float flutterRateLFORate = 0.13f;   // ~8 second cycle
+    // Cross-modulated LFO system for organic, pseudo-random variation
+    // LFO-on-LFO creates complex patterns that never repeat exactly
 
+    // Base LFO rates (prime-ish numbers to avoid correlation)
+    const float wowDepthLFORate = 0.029f;   // ~34 second cycle
+    const float wowRateLFORate = 0.067f;    // ~15 second cycle
+    const float flutterDepthLFORate = 0.109f;  // ~9 second cycle
+    const float flutterRateLFORate = 0.131f;   // ~8 second cycle
+
+    // Update primary LFO phases
     wowDepthLFOPhase_ += wowDepthLFORate * invSr * static_cast<float>(size);
     wowRateLFOPhase_ += wowRateLFORate * invSr * static_cast<float>(size);
     flutterDepthLFOPhase_ += flutterDepthLFORate * invSr * static_cast<float>(size);
@@ -200,24 +203,35 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     if(flutterDepthLFOPhase_ >= 1.0f) flutterDepthLFOPhase_ -= 1.0f;
     if(flutterRateLFOPhase_ >= 1.0f) flutterRateLFOPhase_ -= 1.0f;
 
-    // Generate smooth LFO values (sine waves, -1 to +1)
+    // Generate primary LFO values (sine waves, -1 to +1)
     float wowDepthLFO = std::sin(kTwoPi * wowDepthLFOPhase_);
     float wowRateLFO = std::sin(kTwoPi * wowRateLFOPhase_);
     float flutterDepthLFO = std::sin(kTwoPi * flutterDepthLFOPhase_);
     float flutterRateLFO = std::sin(kTwoPi * flutterRateLFOPhase_);
 
-    // Apply LFO modulation scaled by randomness factors (smooth variation)
-    // Wow modulation
-    const float wowRateMod = 1.0f + wowRandomnessFactor_ * 0.2f * wowRateLFO;
-    const float wowDepthMod = 1.0f + wowRandomnessFactor_ * 0.3f * wowDepthLFO;
+    // Cross-modulation: use one LFO to modulate another's rate/amount
+    // This creates complex, organic patterns
+    // Wow rate is modulated by flutter depth LFO
+    const float wowRateCrossMod = 1.0f + 0.3f * wowRandomnessFactor_ * flutterDepthLFO;
+    const float wowRateMod = wowRateCrossMod * (1.0f + wowRandomnessFactor_ * 0.2f * wowRateLFO);
+
+    // Wow depth is modulated by flutter rate LFO
+    const float wowDepthCrossMod = 1.0f + 0.4f * wowRandomnessFactor_ * flutterRateLFO;
+    const float wowDepthMod = wowDepthCrossMod * (1.0f + wowRandomnessFactor_ * 0.3f * wowDepthLFO);
+
     wowRateL_actual_ = wowRateHz_ * 1.0f * wowRateMod;
     wowDepthL_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
-    wowRateR_actual_ = wowRateHz_ * 1.035f * wowRateMod;  // Same LFO for L/R coherence
+    wowRateR_actual_ = wowRateHz_ * 1.035f * wowRateMod;  // Same cross-mod for L/R coherence
     wowDepthR_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
 
-    // Flutter modulation
-    const float flutterRateMod = 1.0f + flutterTurbulenceFactor_ * 0.2f * flutterRateLFO;
-    const float flutterDepthMod = 1.0f + flutterTurbulenceFactor_ * 0.5f * flutterDepthLFO;
+    // Flutter rate is modulated by wow depth LFO
+    const float flutterRateCrossMod = 1.0f + 0.3f * flutterTurbulenceFactor_ * wowDepthLFO;
+    const float flutterRateMod = flutterRateCrossMod * (1.0f + flutterTurbulenceFactor_ * 0.2f * flutterRateLFO);
+
+    // Flutter depth is modulated by wow rate LFO
+    const float flutterDepthCrossMod = 1.0f + 0.6f * flutterTurbulenceFactor_ * wowRateLFO;
+    const float flutterDepthMod = flutterDepthCrossMod * (1.0f + flutterTurbulenceFactor_ * 0.5f * flutterDepthLFO);
+
     flutterRateL_actual_ = flutterRateHz_ * 1.0f * flutterRateMod;
     flutterDepthL_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f)) * flutterDepthMod;
     flutterRateR_actual_ = flutterRateHz_ * 0.96f * flutterRateMod;

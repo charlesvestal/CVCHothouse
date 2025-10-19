@@ -84,24 +84,33 @@ Custom Freeverb-style reverb using 4 comb filters + 2 allpass filters per channe
 - Cubic Hermite interpolation for smooth pitch modulation
 - Discontinuity guards prevent buffer wrap artifacts
 
-**Organic Modulation System:**
-- **Wow**: 0.015-0.100 Hz range
-  - Mixed waveform: 80% sine + 20% triangle + random noise
-  - Random rate variation: ±20% per cycle
-  - Random depth variation: ±30% (up to ±20ms max)
-  - Creates non-periodic, organic warble
+**Cross-Modulated LFO System:**
+Creates organic, pseudo-random variation without aliasing artifacts.
 
-- **Flutter**: 4.5-7.3 Hz base rate
-  - Turbulent rate variation: ±1 Hz per cycle
-  - Turbulent depth variation: ±50% (up to ±1ms)
-  - Flutter bursts: 2× depth increase for 0.1-0.3s every ~3 seconds (simulates capstan irregularities)
+- **4 Independent LFOs** (prime-numbered rates for non-correlation):
+  - Wow depth: 0.029 Hz (~34 second cycle)
+  - Wow rate: 0.067 Hz (~15 second cycle)
+  - Flutter depth: 0.109 Hz (~9 second cycle)
+  - Flutter rate: 0.131 Hz (~8 second cycle)
 
-- **Drift**: Slow random walk (long-term instability)
+- **Cross-Modulation Matrix:**
+  - Wow rate ← modulated by flutter depth LFO (±30%)
+  - Wow depth ← modulated by flutter rate LFO (±40%)
+  - Flutter rate ← modulated by wow depth LFO (±30%)
+  - Flutter depth ← modulated by wow rate LFO (±60%)
 
-**Randomness Tied to Tape Age (Toggle 1):**
-- New tape: 20% wow randomness, 10% flutter turbulence
-- Used tape: 40% wow randomness, 20% flutter turbulence
-- Worn tape: 70% wow randomness, 40% flutter turbulence
+- **Warble Characteristics:**
+  - Complex, never-repeating patterns (LCM of cycles ~millions of seconds)
+  - Smooth transitions (no discontinuities = no aliasing)
+  - Appears random but fully deterministic
+  - Amount controlled by tape age factors
+
+**Variation Tied to Tape Age (Toggle 1):**
+- New tape: 20% wow variation, 10% flutter turbulence
+- Used tape: 40% wow variation, 20% flutter turbulence
+- Worn tape: 70% wow variation, 40% flutter turbulence
+
+**Flutter Bursts:** 2× depth for 0.1-0.3s every ~3 seconds (capstan slip simulation)
 
 **Debug counters:** burstCountL/R, maxReadDeltaSamplesL/R, jumpCountL/R
 
