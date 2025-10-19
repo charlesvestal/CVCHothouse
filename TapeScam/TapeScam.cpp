@@ -25,6 +25,10 @@ Led              ledBoost;
 
 static bool bypassEnabled = false;
 static bool boostEnabled  = false;
+static int  debugMode     = 0;
+static float sampleRateHz = 48000.0f;
+static uint32_t fs2HoldSamples = 0;
+static uint32_t fs2HoldThreshold = 0;
 
 inline float MapKnobToRange(float knob, float min, float max)
 {
@@ -45,6 +49,7 @@ GainStageModule::Params BuildParams()
     params.inputType    = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1));
     params.clippingType = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2));
     params.toneMode     = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3));
+    params.debugMode    = debugMode;
 
     params.bypass       = bypassEnabled;
     params.boostEngage  = boostEnabled;
@@ -52,23 +57,48 @@ GainStageModule::Params BuildParams()
     return params;
 }
 
-void HandleFootswitches()
+void CycleDebugMode()
 {
-    if(hw.switches[Hothouse::FOOTSWITCH_1].RisingEdge())
+    debugMode = (debugMode + 1) % 4;
+}
+
+void HandleFootswitches(size_t blockSize)
+{
+    auto& fs1 = hw.switches[Hothouse::FOOTSWITCH_1];
+    auto& fs2 = hw.switches[Hothouse::FOOTSWITCH_2];
+
+    if(fs1.RisingEdge())
     {
         bypassEnabled = !bypassEnabled;
     }
 
-    if(hw.switches[Hothouse::FOOTSWITCH_2].RisingEdge())
+    if(fs2.Pressed())
     {
-        boostEnabled = !boostEnabled;
+        fs2HoldSamples += blockSize;
+    }
+
+    if(fs2.FallingEdge())
+    {
+        if(fs2HoldSamples >= fs2HoldThreshold)
+        {
+            CycleDebugMode();
+        }
+        else
+        {
+            boostEnabled = !boostEnabled;
+        }
+        fs2HoldSamples = 0;
+    }
+    else if(!fs2.Pressed())
+    {
+        fs2HoldSamples = 0;
     }
 }
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     hw.ProcessAllControls();
-    HandleFootswitches();
+    HandleFootswitches(size);
 
     auto params = BuildParams();
     gainStage.SetPendingParams(params);
@@ -82,10 +112,13 @@ int main()
     hw.SetAudioBlockSize(48);
     hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
+    sampleRateHz = hw.AudioSampleRate();
+    fs2HoldThreshold = static_cast<uint32_t>(0.6f * sampleRateHz);
+
     ledBypass.Init(hw.seed.GetPin(Hothouse::LED_1), false);
     ledBoost.Init(hw.seed.GetPin(Hothouse::LED_2), false);
 
-    gainStage.Init(hw.AudioSampleRate());
+    gainStage.Init(sampleRateHz);
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
@@ -95,7 +128,16 @@ int main()
         ledBypass.Set(bypassEnabled ? 0.0f : 1.0f);
         ledBypass.Update();
 
-        ledBoost.Set(boostEnabled ? 1.0f : 0.0f);
+        float led2Level = boostEnabled ? 1.0f : 0.0f;
+        if(debugMode != 0)
+        {
+            led2Level = 0.25f + 0.2f * static_cast<float>(debugMode);
+        }
+        if(led2Level > 1.0f)
+        {
+            led2Level = 1.0f;
+        }
+        ledBoost.Set(led2Level);
         ledBoost.Update();
 
         hw.CheckResetToBootloader();
@@ -104,4 +146,3 @@ int main()
 
     return 0;
 }
-

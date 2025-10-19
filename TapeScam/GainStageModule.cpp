@@ -76,6 +76,7 @@ void GainStageModule::Init(float sampleRate)
     params_.inputType     = 0;
     params_.clippingType  = 0;
     params_.toneMode      = 0;
+    params_.debugMode     = 0;
     params_.bypass        = false;
     params_.boostEngage   = false;
 
@@ -302,40 +303,59 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
     }
 
     const float inComp = inputCompGain_;
+    const bool skipClip = params_.debugMode >= 1;
+    const bool skipTone = params_.debugMode >= 2;
+    const bool rawTap   = params_.debugMode >= 3;
 
     for(size_t i = 0; i < size; ++i)
     {
-        float xL = in[0][i] * inComp;
-        float xR = in[1][i] * inComp;
+        float preL = in[0][i] * inComp;
+        float preR = in[1][i] * inComp;
 
-        xL *= trimGainLin_;
-        xR *= trimGainLin_;
+        preL *= trimGainLin_;
+        preR *= trimGainLin_;
 
-        xL *= channelGainLin_;
-        xR *= channelGainLin_;
+        preL *= channelGainLin_;
+        preR *= channelGainLin_;
 
-        xL = ApplyClipping(xL);
-        xR = ApplyClipping(xR);
+        float clipL = skipClip ? preL : ApplyClipping(preL);
+        float clipR = skipClip ? preR : ApplyClipping(preR);
 
-        xL = bassShelf_[0].Process(xL);
-        xL = trebleShelf_[0].Process(xL);
-
-        xR = bassShelf_[1].Process(xR);
-        xR = trebleShelf_[1].Process(xR);
-
-        if(loFiEnabled_)
+        float toneL = clipL;
+        float toneR = clipR;
+        if(!skipTone)
         {
-            xL = loFiLowpass_[0].Process(xL);
-            xR = loFiLowpass_[1].Process(xR);
+            toneL = bassShelf_[0].Process(toneL);
+            toneL = trebleShelf_[0].Process(toneL);
+
+            toneR = bassShelf_[1].Process(toneR);
+            toneR = trebleShelf_[1].Process(toneR);
+
+            if(loFiEnabled_)
+            {
+                toneL = loFiLowpass_[0].Process(toneL);
+                toneR = loFiLowpass_[1].Process(toneR);
+            }
         }
 
-        xL *= masterVolLin_;
-        xR *= masterVolLin_;
+        float selectedL = rawTap ? preL : toneL;
+        float selectedR = rawTap ? preR : toneR;
 
-        xL = SafeLimit(xL);
-        xR = SafeLimit(xR);
+        selectedL *= masterVolLin_;
+        selectedR *= masterVolLin_;
 
-        out[0][i] = xL;
-        out[1][i] = xR;
+        if(rawTap)
+        {
+            selectedL = Clamp(selectedL, -1.1f, 1.1f);
+            selectedR = Clamp(selectedR, -1.1f, 1.1f);
+        }
+        else
+        {
+            selectedL = SafeLimit(selectedL);
+            selectedR = SafeLimit(selectedR);
+        }
+
+        out[0][i] = selectedL;
+        out[1][i] = selectedR;
     }
 }

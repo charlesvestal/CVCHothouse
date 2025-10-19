@@ -19,6 +19,7 @@ class GainStageModule
         int   inputType;
         int   clippingType;
         int   toneMode;
+        int   debugMode;
         bool  bypass;
         bool  boostEngage;
     };
