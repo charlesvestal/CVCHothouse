@@ -2,8 +2,7 @@
 
 #include "SimpleReverb.h"
 
-// Simple reverb module using custom algorithm
-// More stable with modulated inputs than ReverbSc
+// Simple reverb - stable and artifact-free
 class ReverbModule
 {
   public:

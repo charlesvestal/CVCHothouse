@@ -10,9 +10,9 @@ static float DecayTimeToFeedback(float decaySeconds)
         decaySeconds = 10.0f;
 
     // Map decay time to feedback
-    // 1.0s -> 0.7, 3.0s -> 0.85
-    float feedback = 0.6f + (decaySeconds / 10.0f) * 0.25f;
-    return feedback < 0.9f ? feedback : 0.9f;
+    // 1.0s -> 0.7, 3.0s -> 0.85, 5.0s -> 0.9
+    float feedback = 0.6f + (decaySeconds / 10.0f) * 0.3f;
+    return feedback < 0.92f ? feedback : 0.92f;
 }
 
 int ReverbModule::Init(float sampleRate)

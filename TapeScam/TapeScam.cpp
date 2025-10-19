@@ -338,17 +338,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 
     reverb.UpdateControls();
 
-    if(!bypassEnabled)
-    {
-        tapeSat.Process(out, size);
-        tapeWobble.Process(out, out, size);
-        tapeNoise.Process(out, out, size);
-        tapeTone.Process(out, out, size);
-
-        // Reverb after tape processing (space/ambience)
-        reverb.Process(out, out, size);
-    }
-
+    // Update global level control
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
     if(levelKnob <= 0.0005f)
     {
@@ -365,11 +355,20 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 
     if(!bypassEnabled)
     {
+        tapeSat.Process(out, size);
+        tapeWobble.Process(out, out, size);
+        tapeNoise.Process(out, out, size);
+        tapeTone.Process(out, out, size);
+
+        // Apply global level BEFORE reverb
         for(size_t i = 0; i < size; ++i)
         {
             out[0][i] = ClampLevel(out[0][i] * globalLevelCurrent, -1.0f, 1.0f);
             out[1][i] = ClampLevel(out[1][i] * globalLevelCurrent, -1.0f, 1.0f);
         }
+
+        // Reverb after level control (so knob 6 controls reverb input)
+        reverb.Process(out, out, size);
     }
 }
 
