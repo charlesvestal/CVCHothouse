@@ -53,6 +53,21 @@ void TapeSatModule::SetDriveMultiplier(float multiplier)
     paramsDirty_ = true;
 }
 
+void TapeSatModule::SetHFRolloffCutoff(float cutoffHz)
+{
+    // Clamp to reasonable range for audio filters (8kHz to 22kHz)
+    // 0 means use drive-based calculation
+    if(cutoffHz > 0.0f)
+    {
+        hfRolloffOverride_ = Clamp(cutoffHz, 8000.0f, 22000.0f);
+    }
+    else
+    {
+        hfRolloffOverride_ = 0.0f;  // Disable override
+    }
+    paramsDirty_ = true;
+}
+
 void TapeSatModule::UpdateControls()
 {
     if(!paramsDirty_)
@@ -74,7 +89,17 @@ void TapeSatModule::UpdateControls()
     // Apply drive multiplier to saturation factor
     tapeSaturationFactor_ = drive * driveMultiplier_;
     tapeCompressionRatio_ = kCompMin + drive * kCompRange;
-    hfRollOffCutoff_      = kMaxRollOffHz - drive * (kMaxRollOffHz - kMinRollOffHz);
+
+    // Use override cutoff if set, otherwise calculate based on drive
+    if(hfRolloffOverride_ > 0.0f)
+    {
+        hfRollOffCutoff_ = hfRolloffOverride_;
+    }
+    else
+    {
+        hfRollOffCutoff_ = kMaxRollOffHz - drive * (kMaxRollOffHz - kMinRollOffHz);
+    }
+
     biasGain_             = 1.0f + drive * kBiasRange;
 
     for(auto& svf : hfRollOff_)

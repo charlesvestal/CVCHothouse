@@ -14,6 +14,9 @@ class TapeSatModule
     // Set drive multiplier for tape age/condition (1.0 = normal)
     void SetDriveMultiplier(float multiplier);
 
+    // Set HF rolloff cutoff frequency for tape speed mode (Hz)
+    void SetHFRolloffCutoff(float cutoffHz);
+
     // Call each control refresh to smooth and update filter coefficients
     void UpdateControls();
 
@@ -37,6 +40,9 @@ class TapeSatModule
 
     // Multiplier for tape age/condition
     float driveMultiplier_ = 1.0f;
+
+    // HF rolloff override for tape speed mode (0 = use drive-based calculation)
+    float hfRolloffOverride_ = 0.0f;
 
     // Derived parameters
     float tapeDrive_dB_ = 0.0f;
