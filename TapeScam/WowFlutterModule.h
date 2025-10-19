@@ -39,6 +39,16 @@ class WowFlutterModule
     float flutterAmount_= 0.0f;
     float flutterRateHz_= 4.0f;
 
+    // Actual modulated rates/depths (updated at slow rate, not per sample)
+    float wowRateL_actual_ = 0.1f;
+    float wowRateR_actual_ = 0.1f;
+    float wowDepthL_actual_ = 0.0f;
+    float wowDepthR_actual_ = 0.0f;
+    float flutterRateL_actual_ = 4.0f;
+    float flutterRateR_actual_ = 4.0f;
+    float flutterDepthL_actual_ = 0.0f;
+    float flutterDepthR_actual_ = 0.0f;
+
     float wowPhaseL_    = 0.0f;
     float wowPhaseR_    = 0.0f;
     float fltPhaseL_    = 0.0f;
@@ -57,6 +67,9 @@ class WowFlutterModule
     float burstAmountR_ = 1.0f;
     float burstCountdownL_ = 0.0f;
     float burstCountdownR_ = 0.0f;
+
+    // Randomness update timer (update at ~20 Hz, not per sample)
+    float randomUpdateTimer_ = 0.0f;
 
     // Previous read positions for discontinuity detection
     float prevReadPosL_ = 0.0f;
