@@ -1,5 +1,6 @@
 #include "GainStageModule.h"
 #include "TapeSatModule.h"
+#include "WowFlutterModule.h"
 #include <algorithm>
 #include <cmath>
 #include "daisysp.h"
@@ -17,6 +18,7 @@ inline float ClampLevel(float v, float lo, float hi)
 Hothouse         hw;
 GainStageModule  gainStage;
 TapeSatModule    tapeSat;
+WowFlutterModule tapeWobble;
 Led              ledBypass;
 Led              ledBoost;
 
@@ -71,9 +73,13 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     tapeSat.SetDrive(hw.GetKnobValue(Hothouse::KNOB_2));
     tapeSat.UpdateControls();
 
+    tapeWobble.SetAmount(hw.GetKnobValue(Hothouse::KNOB_3));
+    tapeWobble.UpdateControls();
+
     if(!bypassEnabled)
     {
         tapeSat.Process(out, size);
+        tapeWobble.Process(out, out, size);
     }
 
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
@@ -113,6 +119,8 @@ int main()
 
     gainStage.Init(sampleRateHz);
     tapeSat.Init(sampleRateHz);
+    tapeWobble.Init(sampleRateHz);
+    tapeWobble.SetAmount(0.0f);
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
