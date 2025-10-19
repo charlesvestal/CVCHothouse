@@ -30,6 +30,10 @@ class WowFlutterModule
     // Multiplier for tape age/condition
     float depthMultiplier_ = 1.0f;
 
+    // Randomness/turbulence factors (tied to tape age)
+    float wowRandomnessFactor_ = 0.4f;      // 0-1, introduces random variation to wow
+    float flutterTurbulenceFactor_ = 0.2f;  // 0-1, adds turbulence to flutter
+
     float wowAmount_    = 0.0f;
     float wowRateHz_    = 0.1f;
     float flutterAmount_= 0.0f;
@@ -46,6 +50,14 @@ class WowFlutterModule
     float flutterJitL_  = 0.0f;
     float flutterJitR_  = 0.0f;
 
+    // Flutter burst state
+    float burstTimerL_ = 0.0f;
+    float burstTimerR_ = 0.0f;
+    float burstAmountL_ = 1.0f;
+    float burstAmountR_ = 1.0f;
+    float burstCountdownL_ = 0.0f;
+    float burstCountdownR_ = 0.0f;
+
     // Previous read positions for discontinuity detection
     float prevReadPosL_ = 0.0f;
     float prevReadPosR_ = 0.0f;
@@ -55,6 +67,10 @@ class WowFlutterModule
     float maxDeltaR_ = 0.0f;
     uint32_t jumpCountL_ = 0;
     uint32_t jumpCountR_ = 0;
+    uint32_t burstCountL_ = 0;
+    uint32_t burstCountR_ = 0;
+    float maxReadDeltaSamplesL_ = 0.0f;
+    float maxReadDeltaSamplesR_ = 0.0f;
     static constexpr size_t kMaxDelaySamples = 2048;  // ~42ms at 48kHz, plenty for wow/flutter
     std::unique_ptr<float[]> delayBufL_;
     std::unique_ptr<float[]> delayBufR_;
@@ -75,7 +91,9 @@ class WowFlutterModule
     uint32_t randState_ = 0x1234567u;
 
     float NextRand();
+    float NextRandRange(float min, float max);
     static inline float Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
     float NextRandCentered();
+    float TriangleWave(float phase);  // phase in 0-1 range
 };
 

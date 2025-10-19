@@ -51,6 +51,18 @@ void WowFlutterModule::Init(float sampleRate)
     maxDeltaR_ = 0.0f;
     jumpCountL_ = 0;
     jumpCountR_ = 0;
+    burstCountL_ = 0;
+    burstCountR_ = 0;
+    maxReadDeltaSamplesL_ = 0.0f;
+    maxReadDeltaSamplesR_ = 0.0f;
+
+    // Initialize burst state
+    burstTimerL_ = 0.0f;
+    burstTimerR_ = 0.0f;
+    burstAmountL_ = 1.0f;
+    burstAmountR_ = 1.0f;
+    burstCountdownL_ = 0.0f;
+    burstCountdownR_ = 0.0f;
 
     randState_ ^= static_cast<uint32_t>(sampleRate_);
 }
@@ -64,6 +76,21 @@ void WowFlutterModule::SetDepthMultiplier(float multiplier)
 {
     // Ensure multiplier is positive and within reasonable range
     depthMultiplier_ = Clamp(multiplier, 0.5f, 2.0f);
+
+    // Tie randomness/turbulence factors to tape age
+    // New tape (0.8): less randomness
+    // Used tape (1.0): moderate randomness
+    // Worn tape (1.3): high randomness
+    if(depthMultiplier_ <= 0.85f) {
+        wowRandomnessFactor_ = 0.2f;
+        flutterTurbulenceFactor_ = 0.1f;
+    } else if(depthMultiplier_ <= 1.15f) {
+        wowRandomnessFactor_ = 0.4f;
+        flutterTurbulenceFactor_ = 0.2f;
+    } else {
+        wowRandomnessFactor_ = 0.7f;
+        flutterTurbulenceFactor_ = 0.4f;
+    }
 }
 
 void WowFlutterModule::UpdateControls()
@@ -75,7 +102,7 @@ void WowFlutterModule::UpdateControls()
 
     // Apply depth multiplier to wow and flutter amounts
     wowAmount_     = shaped * depthMultiplier_;
-    wowRateHz_     = 0.02f + shaped * 0.10f;      // 0.02 – 0.12 Hz (more noticeable warble)
+    wowRateHz_     = 0.015f + shaped * 0.085f;    // 0.015 – 0.100 Hz (slightly slower lower bound)
     flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f) * depthMultiplier_;
     flutterRateHz_ = 4.5f + flutterAmount_ * 8.0f; // 4.5 – ~7.3 Hz
 }
@@ -143,54 +170,133 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     }
 
     const float wowAmt        = wowAmount_;
-    const float wowRateL      = wowRateHz_;
-    const float wowRateR      = wowRateHz_ * 1.035f;
     const float flutterAmt    = flutterAmount_;
-    const float flutterRateL  = flutterRateHz_;
-    const float flutterRateR  = flutterRateHz_ * 0.96f;
 
     const float invSr         = invSampleRate_;
     const float baseSecL      = baseDelaySamplesL_ * invSr;
     const float baseSecR      = baseDelaySamplesR_ * invSr;
+
+    const float maxWowDepthSec = 0.020f;  // 20ms max
+
+    // Update burst timers (runs once per buffer)
+    const float burstIntervalSec = 3.0f;  // Average time between bursts
+    burstTimerL_ += static_cast<float>(size) * invSr;
+    burstTimerR_ += static_cast<float>(size) * invSr;
 
     for(size_t i = 0; i < size; ++i)
     {
         float xL = in[0][i];
         float xR = in[1][i];
 
-        // Update phases (0..1 cycles)
+        // --- LEFT CHANNEL ---
+
+        // Apply randomness to wow rate and depth
+        const float wowRateL = wowRateHz_ * 1.0f * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.2f, 0.2f));
+        const float wowDepthSecL = maxWowDepthSec * wowAmt * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.3f, 0.3f));
+
+        // Update wow phase
         wowPhaseL_ += wowRateL * invSr;
-        wowPhaseR_ += wowRateR * invSr;
-        fltPhaseL_ += flutterRateL * invSr;
-        fltPhaseR_ += flutterRateR * invSr;
         if(wowPhaseL_ >= 1.0f) wowPhaseL_ -= 1.0f;
-        if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
+
+        // Wow waveform: mix sine + triangle + noise
+        const float alpha = 0.2f;
+        const float beta = wowRandomnessFactor_ * 0.1f;
+        float wowL = (1.0f - alpha) * std::sin(kTwoPi * wowPhaseL_)
+                   + alpha * TriangleWave(wowPhaseL_)
+                   + beta * NextRandCentered();
+
+        // Apply turbulence to flutter rate and depth
+        const float flutterRateL = flutterRateHz_ * 1.0f + flutterTurbulenceFactor_ * NextRandRange(-1.0f, 1.0f);
+        float flutterDepthSecL = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));
+        flutterDepthSecL *= (1.0f + flutterTurbulenceFactor_ * NextRandRange(-0.5f, 0.5f));
+
+        // Update flutter phase
+        fltPhaseL_ += flutterRateL * invSr;
         if(fltPhaseL_ >= 1.0f) fltPhaseL_ -= 1.0f;
+
+        // Flutter waveform with turbulence
+        const float betaFlutter = flutterTurbulenceFactor_ * 0.05f;
+        flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
+        float flutterL = std::sin(kTwoPi * fltPhaseL_)
+                       + betaFlutter * NextRandCentered();
+
+        // Flutter burst logic
+        if(burstCountdownL_ > 0.0f) {
+            burstCountdownL_ -= invSr;
+            if(burstCountdownL_ <= 0.0f) {
+                burstAmountL_ = 1.0f;  // End burst
+            }
+        } else if(burstTimerL_ > burstIntervalSec) {
+            // Trigger new burst with some randomness
+            if(NextRand() < (invSr * static_cast<float>(size) / burstIntervalSec)) {
+                burstCountdownL_ = NextRandRange(0.1f, 0.3f);
+                burstAmountL_ = 2.0f;  // Double flutter during burst
+                burstCountL_++;
+                burstTimerL_ = 0.0f;
+            }
+        }
+
+        // Drift
+        float driftTargetL = kDriftScale * NextRandCentered();
+        driftL_ += kDriftCoeff * (driftTargetL - driftL_);
+
+        // Combine modulations
+        float devSecL = wowDepthSecL * wowL
+                      + flutterDepthSecL * burstAmountL_ * (flutterL + 0.35f * flutterJitL_)
+                      + driftL_;
+
+        // --- RIGHT CHANNEL ---
+
+        // Apply randomness to wow rate and depth (different per channel)
+        const float wowRateR = wowRateHz_ * 1.035f * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.2f, 0.2f));
+        const float wowDepthSecR = maxWowDepthSec * wowAmt * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.3f, 0.3f));
+
+        // Update wow phase
+        wowPhaseR_ += wowRateR * invSr;
+        if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
+
+        // Wow waveform
+        float wowR = (1.0f - alpha) * std::sin(kTwoPi * wowPhaseR_)
+                   + alpha * TriangleWave(wowPhaseR_)
+                   + beta * NextRandCentered();
+
+        // Apply turbulence to flutter
+        const float flutterRateR = flutterRateHz_ * 0.96f + flutterTurbulenceFactor_ * NextRandRange(-1.0f, 1.0f);
+        float flutterDepthSecR = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));
+        flutterDepthSecR *= (1.0f + flutterTurbulenceFactor_ * NextRandRange(-0.5f, 0.5f));
+
+        // Update flutter phase
+        fltPhaseR_ += flutterRateR * invSr;
         if(fltPhaseR_ >= 1.0f) fltPhaseR_ -= 1.0f;
 
-        // Drift targets and jitter
-        float driftTargetL = kDriftScale * NextRandCentered();
+        // Flutter waveform
+        flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
+        float flutterR = std::sin(kTwoPi * fltPhaseR_)
+                       + betaFlutter * NextRandCentered();
+
+        // Flutter burst logic
+        if(burstCountdownR_ > 0.0f) {
+            burstCountdownR_ -= invSr;
+            if(burstCountdownR_ <= 0.0f) {
+                burstAmountR_ = 1.0f;
+            }
+        } else if(burstTimerR_ > burstIntervalSec) {
+            if(NextRand() < (invSr * static_cast<float>(size) / burstIntervalSec)) {
+                burstCountdownR_ = NextRandRange(0.1f, 0.3f);
+                burstAmountR_ = 2.0f;
+                burstCountR_++;
+                burstTimerR_ = 0.0f;
+            }
+        }
+
+        // Drift
         float driftTargetR = kDriftScale * NextRandCentered();
-        driftL_ += kDriftCoeff * (driftTargetL - driftL_);
         driftR_ += kDriftCoeff * (driftTargetR - driftR_);
 
-        flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
-        flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
-
-        const float wowDepthSec   = 0.020f * wowAmt;                       // up to ~20 ms swing (wider pitch modulation)
-        const float flutterDepthSec = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));     // more pronounced flutter
-
-        float wowL = std::sin(kTwoPi * wowPhaseL_);
-        float wowR = std::sin(kTwoPi * wowPhaseR_);
-        float flutterL = std::sin(kTwoPi * fltPhaseL_);
-        float flutterR = std::sin(kTwoPi * fltPhaseR_);
-
-        float devSecL = wowDepthSec * wowL
-                        + flutterDepthSec * (flutterL + 0.35f * flutterJitL_)
-                        + driftL_;
-        float devSecR = wowDepthSec * wowR
-                        + flutterDepthSec * (flutterR + 0.35f * flutterJitR_)
-                        + driftR_;
+        // Combine modulations
+        float devSecR = wowDepthSecR * wowR
+                      + flutterDepthSecR * burstAmountR_ * (flutterR + 0.35f * flutterJitR_)
+                      + driftR_;
 
         devSecL = Clamp(devSecL, -kMaxDevSec, kMaxDevSec);
         devSecR = Clamp(devSecR, -kMaxDevSec, kMaxDevSec);
@@ -203,6 +309,13 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
 
         float deltaL = targetSamplesL - readStateL_;
         float deltaR = targetSamplesR - readStateR_;
+
+        // Track max read delta for debugging
+        float absDeltaL = fabsf(deltaL);
+        float absDeltaR = fabsf(deltaR);
+        if(absDeltaL > maxReadDeltaSamplesL_) maxReadDeltaSamplesL_ = absDeltaL;
+        if(absDeltaR > maxReadDeltaSamplesR_) maxReadDeltaSamplesR_ = absDeltaR;
+
         if(deltaL > kMaxDeltaSamples) deltaL = kMaxDeltaSamples;
         else if(deltaL < -kMaxDeltaSamples) deltaL = -kMaxDeltaSamples;
         if(deltaR > kMaxDeltaSamples) deltaR = kMaxDeltaSamples;
@@ -284,4 +397,20 @@ float WowFlutterModule::NextRand()
 float WowFlutterModule::NextRandCentered()
 {
     return NextRand() * 2.0f - 1.0f;
+}
+
+float WowFlutterModule::NextRandRange(float min, float max)
+{
+    return min + NextRand() * (max - min);
+}
+
+float WowFlutterModule::TriangleWave(float phase)
+{
+    // phase in 0-1 range
+    // Triangle: rises 0->1 in first half, falls 1->0 in second half
+    if(phase < 0.5f) {
+        return 4.0f * phase - 1.0f;  // -1 to +1
+    } else {
+        return 3.0f - 4.0f * phase;  // +1 to -1
+    }
 }

@@ -83,12 +83,27 @@ Custom Freeverb-style reverb using 4 comb filters + 2 allpass filters per channe
 - Base delays: 12ms (L), 15ms (R) for stereo width
 - Cubic Hermite interpolation for smooth pitch modulation
 - Discontinuity guards prevent buffer wrap artifacts
-- Modulation sources:
-  - Wow: 0.02-0.12 Hz sine waves (wider, slower warble)
-  - Wow depth: up to ±20ms (±2.4% pitch variation)
-  - Flutter: 4.5-7.3 Hz sine with jitter
-  - Flutter depth: up to ±1ms
-  - Drift: Slow random walk
+
+**Organic Modulation System:**
+- **Wow**: 0.015-0.100 Hz range
+  - Mixed waveform: 80% sine + 20% triangle + random noise
+  - Random rate variation: ±20% per cycle
+  - Random depth variation: ±30% (up to ±20ms max)
+  - Creates non-periodic, organic warble
+
+- **Flutter**: 4.5-7.3 Hz base rate
+  - Turbulent rate variation: ±1 Hz per cycle
+  - Turbulent depth variation: ±50% (up to ±1ms)
+  - Flutter bursts: 2× depth increase for 0.1-0.3s every ~3 seconds (simulates capstan irregularities)
+
+- **Drift**: Slow random walk (long-term instability)
+
+**Randomness Tied to Tape Age (Toggle 1):**
+- New tape: 20% wow randomness, 10% flutter turbulence
+- Used tape: 40% wow randomness, 20% flutter turbulence
+- Worn tape: 70% wow randomness, 40% flutter turbulence
+
+**Debug counters:** burstCountL/R, maxReadDeltaSamplesL/R, jumpCountL/R
 
 ### Known Characteristics
 - Toggle switches combine effects (Age + Speed both affect headroom and saturation)
