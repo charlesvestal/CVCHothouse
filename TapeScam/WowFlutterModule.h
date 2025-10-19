@@ -68,8 +68,11 @@ class WowFlutterModule
     float burstCountdownL_ = 0.0f;
     float burstCountdownR_ = 0.0f;
 
-    // Randomness update timer (update at ~20 Hz, not per sample)
-    float randomUpdateTimer_ = 0.0f;
+    // Slow LFO phases for smooth parameter modulation (no discontinuities)
+    float wowDepthLFOPhase_ = 0.0f;
+    float wowRateLFOPhase_ = 0.0f;
+    float flutterDepthLFOPhase_ = 0.0f;
+    float flutterRateLFOPhase_ = 0.0f;
 
     // Previous read positions for discontinuity detection
     float prevReadPosL_ = 0.0f;

@@ -183,31 +183,45 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     burstTimerL_ += static_cast<float>(size) * invSr;
     burstTimerR_ += static_cast<float>(size) * invSr;
 
-    // Update randomness/turbulence values at ~20 Hz to avoid aliasing
-    // CRITICAL: Don't update these per-sample or you get bitcrushing!
-    const float randomUpdateInterval = 0.05f;  // 20 Hz
-    randomUpdateTimer_ += static_cast<float>(size) * invSr;
-    if(randomUpdateTimer_ >= randomUpdateInterval) {
-        randomUpdateTimer_ = 0.0f;
+    // Smooth LFO modulation for organic variation (no discontinuities)
+    // Update LFO phases - very slow oscillators for warble
+    const float wowDepthLFORate = 0.03f;   // ~33 second cycle
+    const float wowRateLFORate = 0.07f;    // ~14 second cycle
+    const float flutterDepthLFORate = 0.11f;  // ~9 second cycle
+    const float flutterRateLFORate = 0.13f;   // ~8 second cycle
 
-        // Update wow rate and depth with randomness (LEFT)
-        wowRateL_actual_ = wowRateHz_ * 1.0f * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.2f, 0.2f));
-        wowDepthL_actual_ = maxWowDepthSec * wowAmt * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.3f, 0.3f));
+    wowDepthLFOPhase_ += wowDepthLFORate * invSr * static_cast<float>(size);
+    wowRateLFOPhase_ += wowRateLFORate * invSr * static_cast<float>(size);
+    flutterDepthLFOPhase_ += flutterDepthLFORate * invSr * static_cast<float>(size);
+    flutterRateLFOPhase_ += flutterRateLFORate * invSr * static_cast<float>(size);
 
-        // Update wow rate and depth with randomness (RIGHT)
-        wowRateR_actual_ = wowRateHz_ * 1.035f * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.2f, 0.2f));
-        wowDepthR_actual_ = maxWowDepthSec * wowAmt * (1.0f + wowRandomnessFactor_ * NextRandRange(-0.3f, 0.3f));
+    if(wowDepthLFOPhase_ >= 1.0f) wowDepthLFOPhase_ -= 1.0f;
+    if(wowRateLFOPhase_ >= 1.0f) wowRateLFOPhase_ -= 1.0f;
+    if(flutterDepthLFOPhase_ >= 1.0f) flutterDepthLFOPhase_ -= 1.0f;
+    if(flutterRateLFOPhase_ >= 1.0f) flutterRateLFOPhase_ -= 1.0f;
 
-        // Update flutter with turbulence (LEFT)
-        flutterRateL_actual_ = flutterRateHz_ * 1.0f + flutterTurbulenceFactor_ * NextRandRange(-1.0f, 1.0f);
-        flutterDepthL_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));
-        flutterDepthL_actual_ *= (1.0f + flutterTurbulenceFactor_ * NextRandRange(-0.5f, 0.5f));
+    // Generate smooth LFO values (sine waves, -1 to +1)
+    float wowDepthLFO = std::sin(kTwoPi * wowDepthLFOPhase_);
+    float wowRateLFO = std::sin(kTwoPi * wowRateLFOPhase_);
+    float flutterDepthLFO = std::sin(kTwoPi * flutterDepthLFOPhase_);
+    float flutterRateLFO = std::sin(kTwoPi * flutterRateLFOPhase_);
 
-        // Update flutter with turbulence (RIGHT)
-        flutterRateR_actual_ = flutterRateHz_ * 0.96f + flutterTurbulenceFactor_ * NextRandRange(-1.0f, 1.0f);
-        flutterDepthR_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));
-        flutterDepthR_actual_ *= (1.0f + flutterTurbulenceFactor_ * NextRandRange(-0.5f, 0.5f));
-    }
+    // Apply LFO modulation scaled by randomness factors (smooth variation)
+    // Wow modulation
+    const float wowRateMod = 1.0f + wowRandomnessFactor_ * 0.2f * wowRateLFO;
+    const float wowDepthMod = 1.0f + wowRandomnessFactor_ * 0.3f * wowDepthLFO;
+    wowRateL_actual_ = wowRateHz_ * 1.0f * wowRateMod;
+    wowDepthL_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
+    wowRateR_actual_ = wowRateHz_ * 1.035f * wowRateMod;  // Same LFO for L/R coherence
+    wowDepthR_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
+
+    // Flutter modulation
+    const float flutterRateMod = 1.0f + flutterTurbulenceFactor_ * 0.2f * flutterRateLFO;
+    const float flutterDepthMod = 1.0f + flutterTurbulenceFactor_ * 0.5f * flutterDepthLFO;
+    flutterRateL_actual_ = flutterRateHz_ * 1.0f * flutterRateMod;
+    flutterDepthL_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f)) * flutterDepthMod;
+    flutterRateR_actual_ = flutterRateHz_ * 0.96f * flutterRateMod;
+    flutterDepthR_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f)) * flutterDepthMod;
 
     for(size_t i = 0; i < size; ++i)
     {
