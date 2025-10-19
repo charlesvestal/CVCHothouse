@@ -6,23 +6,30 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace
+{
+constexpr float kTwoPi = 6.283185307179586476925286766559f;
+constexpr float kBaseDelayMsL = 12.0f;
+constexpr float kBaseDelayMsR = 15.0f;
+constexpr float kMaxDeltaSamples = 0.9f;
+}
+
 void WowFlutterModule::Init(float sampleRate)
 {
     sampleRate_    = sampleRate;
-    invSampleRate_ = 1.0f / sampleRate_;
+    invSampleRate_ = (sampleRate_ > 0.0f) ? 1.0f / sampleRate_ : 0.0f;
     targetAmount_  = 0.0f;
     smoothedAmount_= 0.0f;
 
-    wowDepth_ = 0.0f;
-    wowRate_  = 0.1f;
-    flutterDepth_ = 0.0f;
-    flutterRate_  = 4.0f;
+    wowAmount_     = 0.0f;
+    wowRateHz_     = 0.2f;
+    flutterAmount_ = 0.0f;
+    flutterRateHz_ = 6.0f;
 
-    phaseWow_     = 0.0f;
-    phaseFlutter_ = 0.0f;
-    wowDrift_     = 0.0f;
-
-    randState_ ^= static_cast<uint32_t>(sampleRate_);
+    wowPhaseL_ = wowPhaseR_ = 0.0f;
+    fltPhaseL_ = fltPhaseR_ = 0.0f;
+    driftL_ = driftR_ = 0.0f;
+    flutterJitL_ = flutterJitR_ = 0.0f;
 
     delayBufSize_ = kMaxDelaySamples;
     delayBufL_.reset(new float[delayBufSize_]);
@@ -31,14 +38,18 @@ void WowFlutterModule::Init(float sampleRate)
     std::fill(delayBufR_.get(), delayBufR_.get() + delayBufSize_, 0.0f);
 
     writeIndex_ = 0;
-    baseDelaySamples_ = std::min(sampleRate_ * 0.015f, static_cast<float>(delayBufSize_) - 4.0f);
+
+    baseDelaySamplesL_ = std::min(sampleRate_ * (kBaseDelayMsL * 0.001f), static_cast<float>(delayBufSize_) - 4.0f);
+    baseDelaySamplesR_ = std::min(sampleRate_ * (kBaseDelayMsR * 0.001f), static_cast<float>(delayBufSize_) - 4.0f);
+    readStateL_ = baseDelaySamplesL_;
+    readStateR_ = baseDelaySamplesR_;
+
+    randState_ ^= static_cast<uint32_t>(sampleRate_);
 }
 
 void WowFlutterModule::SetAmount(float amount)
 {
-    if(amount < 0.0f) amount = 0.0f;
-    else if(amount > 1.0f) amount = 1.0f;
-    targetAmount_ = amount;
+    targetAmount_ = Clamp(amount, 0.0f, 1.0f);
 }
 
 void WowFlutterModule::UpdateControls()
@@ -46,16 +57,17 @@ void WowFlutterModule::UpdateControls()
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
 
     const float amt = smoothedAmount_;
-    float shaped = amt * amt;
-    wowDepth_     = shaped * 0.035f;          // +/-3.5% speed at max
-    wowRate_      = 0.05f + shaped * 0.95f;
-    flutterDepth_ = amt * 0.005f;
-    flutterRate_  = 6.0f + amt * 24.0f;
+    const float shaped = Clamp(amt * amt, 0.0f, 1.0f);
 
+    wowAmount_     = shaped;
+    wowRateHz_     = 0.01f + shaped * 0.05f;      // 0.01 – 0.06 Hz
+    flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f);
+    flutterRateHz_ = 4.5f + flutterAmount_ * 8.0f; // 4.5 – ~7.3 Hz
 }
+
 float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float index)
 {
-    int idx0 = static_cast<int>(floorf(index));
+    int idx0 = static_cast<int>(std::floor(index));
     int idx1 = idx0 + 1;
     float frac = index - static_cast<float>(idx0);
     while(idx0 < 0) idx0 += static_cast<int>(size);
@@ -80,42 +92,82 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         }
         return;
     }
-    const float wowDepth     = wowDepth_;
-    const float wowRate      = wowRate_;
-    const float flutterDepth = flutterDepth_;
-    const float flutterRate  = flutterRate_;
-    const float invSr        = invSampleRate_;
+
+    const float wowAmt        = wowAmount_;
+    const float wowRateL      = wowRateHz_;
+    const float wowRateR      = wowRateHz_ * 1.035f;
+    const float flutterAmt    = flutterAmount_;
+    const float flutterRateL  = flutterRateHz_;
+    const float flutterRateR  = flutterRateHz_ * 0.96f;
+
+    const float invSr         = invSampleRate_;
+    const float baseSecL      = baseDelaySamplesL_ * invSr;
+    const float baseSecR      = baseDelaySamplesR_ * invSr;
 
     for(size_t i = 0; i < size; ++i)
     {
         float xL = in[0][i];
         float xR = in[1][i];
 
-        phaseWow_     += wowRate * invSr;
-        phaseFlutter_ += flutterRate * invSr;
-        if(phaseWow_ >= 1.0f)
-            phaseWow_ -= 1.0f;
-        if(phaseFlutter_ >= 1.0f)
-            phaseFlutter_ -= 1.0f;
+        // Update phases (0..1 cycles)
+        wowPhaseL_ += wowRateL * invSr;
+        wowPhaseR_ += wowRateR * invSr;
+        fltPhaseL_ += flutterRateL * invSr;
+        fltPhaseR_ += flutterRateR * invSr;
+        if(wowPhaseL_ >= 1.0f) wowPhaseL_ -= 1.0f;
+        if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
+        if(fltPhaseL_ >= 1.0f) fltPhaseL_ -= 1.0f;
+        if(fltPhaseR_ >= 1.0f) fltPhaseR_ -= 1.0f;
 
-        wowDrift_ += kDriftSmooth * (NextRandCentered() - wowDrift_);
-        float modWowSin = sinf(2.0f * static_cast<float>(M_PI) * phaseWow_) * wowDepth;
-        float modWow    = modWowSin + wowDrift_ * wowDepth * 1.0f;
-        float modFlutter = sinf(2.0f * static_cast<float>(M_PI) * phaseFlutter_) * flutterDepth;
-        float speedMod   = 1.0f + modWow + modFlutter;
-        const float minMod = 0.45f;
-        const float maxMod = 1.55f;
-        if(speedMod < minMod) speedMod = minMod;
-        else if(speedMod > maxMod) speedMod = maxMod;
-        speedMod = (speedMod < 0.8f ? 0.8f : (speedMod > 1.2f ? 1.2f : speedMod));
+        // Drift targets and jitter
+        float driftTargetL = kDriftScale * NextRandCentered();
+        float driftTargetR = kDriftScale * NextRandCentered();
+        driftL_ += kDriftCoeff * (driftTargetL - driftL_);
+        driftR_ += kDriftCoeff * (driftTargetR - driftR_);
 
-        float delaySamples = baseDelaySamples_ * speedMod;
-        float readIndex    = static_cast<float>(writeIndex_) - delaySamples;
-        if(readIndex < 0.0f)
-            readIndex += static_cast<float>(delayBufSize_);
+        flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
+        flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
 
-        float delayedL = InterpolateLinear(delayBufL_.get(), delayBufSize_, readIndex);
-        float delayedR = InterpolateLinear(delayBufR_.get(), delayBufSize_, readIndex);
+        const float wowDepthSec   = 0.0085f * wowAmt;                       // up to ~8.5 ms swing
+        const float flutterDepthSec = 0.00035f * std::sqrt(std::max(flutterAmt, 0.0f));     // gentle flutter
+
+        float wowL = std::sin(kTwoPi * wowPhaseL_);
+        float wowR = std::sin(kTwoPi * wowPhaseR_);
+        float flutterL = std::sin(kTwoPi * fltPhaseL_);
+        float flutterR = std::sin(kTwoPi * fltPhaseR_);
+
+        float devSecL = wowDepthSec * wowL
+                        + flutterDepthSec * (flutterL + 0.35f * flutterJitL_)
+                        + driftL_;
+        float devSecR = wowDepthSec * wowR
+                        + flutterDepthSec * (flutterR + 0.35f * flutterJitR_)
+                        + driftR_;
+
+        devSecL = Clamp(devSecL, -kMaxDevSec, kMaxDevSec);
+        devSecR = Clamp(devSecR, -kMaxDevSec, kMaxDevSec);
+
+        float readSecL = std::max(kMinReadSec, baseSecL + devSecL);
+        float readSecR = std::max(kMinReadSec, baseSecR + devSecR);
+
+        float targetSamplesL = readSecL * sampleRate_;
+        float targetSamplesR = readSecR * sampleRate_;
+
+        float deltaL = targetSamplesL - readStateL_;
+        float deltaR = targetSamplesR - readStateR_;
+        if(deltaL > kMaxDeltaSamples) deltaL = kMaxDeltaSamples;
+        else if(deltaL < -kMaxDeltaSamples) deltaL = -kMaxDeltaSamples;
+        if(deltaR > kMaxDeltaSamples) deltaR = kMaxDeltaSamples;
+        else if(deltaR < -kMaxDeltaSamples) deltaR = -kMaxDeltaSamples;
+        readStateL_ += deltaL;
+        readStateR_ += deltaR;
+
+        float readIndexL = static_cast<float>(writeIndex_) - readStateL_;
+        float readIndexR = static_cast<float>(writeIndex_) - readStateR_;
+        if(readIndexL < 0.0f) readIndexL += static_cast<float>(delayBufSize_);
+        if(readIndexR < 0.0f) readIndexR += static_cast<float>(delayBufSize_);
+
+        float delayedL = InterpolateLinear(delayBufL_.get(), delayBufSize_, readIndexL);
+        float delayedR = InterpolateLinear(delayBufR_.get(), delayBufSize_, readIndexR);
 
         delayBufL_[writeIndex_] = xL;
         delayBufR_[writeIndex_] = xR;
@@ -128,7 +180,6 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         out[1][i] = delayedR;
     }
 }
-
 
 float WowFlutterModule::NextRand()
 {
