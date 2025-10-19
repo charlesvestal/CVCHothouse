@@ -7,22 +7,14 @@ using namespace daisy;
 using namespace daisysp;
 using clevelandmusicco::Hothouse;
 
-namespace
-{
-}
-
 Hothouse         hw;
 GainStageModule  gainStage;
 TapeSatModule    tapeSat;
 Led              ledBypass;
 Led              ledBoost;
 
-static bool bypassEnabled = false;
-static bool boostEnabled  = false;
-static int  debugMode     = 0;
-static float sampleRateHz = 48000.0f;
-static uint32_t fs2HoldSamples = 0;
-static uint32_t fs2HoldThreshold = 0;
+static bool  bypassEnabled = false;
+static float sampleRateHz  = 48000.0f;
 
 GainStageModule::Params BuildParams()
 {
@@ -40,67 +32,36 @@ GainStageModule::Params BuildParams()
     params.inputType    = 0;
     params.clippingType = 0;
     params.toneMode     = 0;
-    params.debugMode    = debugMode;
+    params.debugMode    = 0;
 
     params.bypass       = bypassEnabled;
-    params.boostEngage  = boostEnabled;
+    params.boostEngage  = false;
 
     return params;
 }
 
-void CycleDebugMode()
+void HandleFootswitches()
 {
-    debugMode = (debugMode + 1) % 4;
-}
-
-void HandleFootswitches(size_t blockSize)
-{
-    auto& fs1 = hw.switches[Hothouse::FOOTSWITCH_1];
-    auto& fs2 = hw.switches[Hothouse::FOOTSWITCH_2];
-
-    if(fs1.RisingEdge())
+    if(hw.switches[Hothouse::FOOTSWITCH_1].RisingEdge())
     {
         bypassEnabled = !bypassEnabled;
-    }
-
-    if(fs2.Pressed())
-    {
-        fs2HoldSamples += blockSize;
-    }
-
-    if(fs2.FallingEdge())
-    {
-        if(fs2HoldSamples >= fs2HoldThreshold)
-        {
-            CycleDebugMode();
-        }
-        else
-        {
-            boostEnabled = !boostEnabled;
-        }
-        fs2HoldSamples = 0;
-    }
-    else if(!fs2.Pressed())
-    {
-        fs2HoldSamples = 0;
     }
 }
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     hw.ProcessAllControls();
-    HandleFootswitches(size);
+    HandleFootswitches();
 
     auto params = BuildParams();
     gainStage.SetPendingParams(params);
     gainStage.UpdateControls();
     gainStage.Process(in, out, size);
 
-    const float tapeDrive = hw.GetKnobValue(Hothouse::KNOB_2);
-    tapeSat.SetDrive(tapeDrive);
+    tapeSat.SetDrive(hw.GetKnobValue(Hothouse::KNOB_2));
     tapeSat.UpdateControls();
 
-    if(!bypassEnabled && debugMode < 3)
+    if(!bypassEnabled)
     {
         tapeSat.Process(out, size);
     }
@@ -109,11 +70,10 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 int main()
 {
     hw.Init();
-    hw.SetAudioBlockSize(48);
+    hw.SetAudioBlockSize(4);
     hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
     sampleRateHz = hw.AudioSampleRate();
-    fs2HoldThreshold = static_cast<uint32_t>(0.6f * sampleRateHz);
 
     ledBypass.Init(hw.seed.GetPin(Hothouse::LED_1), false);
     ledBoost.Init(hw.seed.GetPin(Hothouse::LED_2), false);
@@ -129,16 +89,7 @@ int main()
         ledBypass.Set(bypassEnabled ? 0.0f : 1.0f);
         ledBypass.Update();
 
-        float led2Level = boostEnabled ? 1.0f : 0.0f;
-        if(debugMode != 0)
-        {
-            led2Level = 0.25f + 0.2f * static_cast<float>(debugMode);
-        }
-        if(led2Level > 1.0f)
-        {
-            led2Level = 1.0f;
-        }
-        ledBoost.Set(led2Level);
+        ledBoost.Set(0.0f);
         ledBoost.Update();
 
         hw.CheckResetToBootloader();
