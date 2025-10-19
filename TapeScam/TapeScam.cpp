@@ -345,7 +345,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         tapeNoise.Process(out, out, size);
         tapeTone.Process(out, out, size);
 
-        // Reverb after tone shaping, before global level
+        // Reverb after tape processing (space/ambience)
         reverb.Process(out, out, size);
     }
 
@@ -379,49 +379,24 @@ int main()
     hw.SetAudioBlockSize(4);
     hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
-    // Initialize USB logging for debugging
-    hw.seed.StartLog(true);
-    hw.seed.PrintLine("=== TapeScam Starting ===");
+    // Initialize USB logging (non-blocking)
+    hw.seed.StartLog(false);
 
     sampleRateHz = hw.AudioSampleRate();
-    hw.seed.PrintLine("Sample rate: %d", (int)sampleRateHz);
 
     ledBypass.Init(hw.seed.GetPin(Hothouse::LED_1), false);
     ledBoost.Init(hw.seed.GetPin(Hothouse::LED_2), false);
-    hw.seed.PrintLine("LEDs initialized");
 
-    hw.seed.PrintLine("Initializing modules...");
     gainStage.Init(sampleRateHz);
-    hw.seed.PrintLine("  - GainStage OK");
-
     tapeSat.Init(sampleRateHz);
-    hw.seed.PrintLine("  - TapeSat OK");
-
     tapeWobble.Init(sampleRateHz);
     tapeWobble.SetAmount(0.0f);
-    hw.seed.PrintLine("  - WowFlutter OK");
-
     tapeNoise.Init(sampleRateHz, 2);
-    hw.seed.PrintLine("  - HissDropout OK");
-
     tapeTone.Init(sampleRateHz, 2);
-    hw.seed.PrintLine("  - Tone OK");
+    reverb.Init(sampleRateHz);
 
-    hw.seed.PrintLine("Initializing reverb (this uses large buffers)...");
-    int reverbResult = reverb.Init(sampleRateHz);
-    if(reverbResult == 0)
-    {
-        hw.seed.PrintLine("  - Reverb OK");
-    }
-    else
-    {
-        hw.seed.PrintLine("  - Reverb FAILED! Error code: %d", reverbResult);
-    }
-
-    hw.seed.PrintLine("Starting audio...");
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
-    hw.seed.PrintLine("Audio started - running!");
 
     while(true)
     {

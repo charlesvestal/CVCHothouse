@@ -9,9 +9,10 @@ static float DecayTimeToFeedback(float decaySeconds)
     if(decaySeconds > 10.0f)
         decaySeconds = 10.0f;
 
-    // Map decay time to feedback: 0.5s -> 0.7, 1.0s -> 0.8, 3.0s -> 0.9
-    float feedback = 0.5f + (decaySeconds / 10.0f) * 0.45f;
-    return feedback < 0.95f ? feedback : 0.95f;
+    // Map decay time to feedback - conservative to prevent instability
+    // 1.0s -> 0.7, 3.0s -> 0.85
+    float feedback = 0.6f + (decaySeconds / 10.0f) * 0.25f;
+    return feedback < 0.85f ? feedback : 0.85f;
 }
 
 int ReverbModule::Init(float sampleRate)
@@ -20,12 +21,17 @@ int ReverbModule::Init(float sampleRate)
     mix_ = 0.0f;
     targetMix_ = 0.0f;
 
+    preFilterL1_ = 0.0f;
+    preFilterL2_ = 0.0f;
+    preFilterR1_ = 0.0f;
+    preFilterR2_ = 0.0f;
+
     // Initialize DaisySP reverb - returns 0 on success, 1 on failure
     int result = reverb_.Init(sampleRate_);
     if(result == 0)
     {
-        reverb_.SetFeedback(0.8f);
-        reverb_.SetLpFreq(8000.0f);
+        reverb_.SetFeedback(0.7f);   // Conservative default
+        reverb_.SetLpFreq(10000.0f);  // Standard damping
     }
     return result;
 }
@@ -72,16 +78,36 @@ void ReverbModule::Process(float** in, float** out, size_t size)
     const float dryMix = 1.0f - currentMix;
     const float wetMix = currentMix;
 
+    // Two-pole lowpass pre-filter: ~8kHz cutoff to remove artifacts
+    const float lpCoeff1 = 0.45f;
+    const float lpCoeff2 = 0.35f;
+
     for(size_t i = 0; i < size; ++i)
     {
         float inL = in[0][i];
         float inR = in[1][i];
 
-        // Process through reverb
-        float reverbL, reverbR;
-        reverb_.Process(inL, inR, &reverbL, &reverbR);
+        // Soft-clip input
+        inL = fmaxf(-0.95f, fminf(0.95f, inL));
+        inR = fmaxf(-0.95f, fminf(0.95f, inR));
 
-        // Mix dry and wet signals
+        // Two-stage lowpass to aggressively remove high-frequency artifacts
+        preFilterL1_ += (inL - preFilterL1_) * lpCoeff1;
+        preFilterL2_ += (preFilterL1_ - preFilterL2_) * lpCoeff2;
+        preFilterR1_ += (inR - preFilterR1_) * lpCoeff1;
+        preFilterR2_ += (preFilterR1_ - preFilterR2_) * lpCoeff2;
+
+        // Process through reverb with filtered input
+        float reverbL = 0.0f, reverbR = 0.0f;
+        reverb_.Process(preFilterL2_, preFilterR2_, &reverbL, &reverbR);
+
+        // Denormal protection and hard limit reverb output
+        if(fabsf(reverbL) < 1e-10f) reverbL = 0.0f;
+        if(fabsf(reverbR) < 1e-10f) reverbR = 0.0f;
+        reverbL = fmaxf(-1.0f, fminf(1.0f, reverbL));
+        reverbR = fmaxf(-1.0f, fminf(1.0f, reverbR));
+
+        // Mix dry (unfiltered) and wet signals
         out[0][i] = inL * dryMix + reverbL * wetMix;
         out[1][i] = inR * dryMix + reverbR * wetMix;
     }

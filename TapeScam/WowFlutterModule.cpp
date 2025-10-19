@@ -84,6 +84,40 @@ float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float i
     return buf[idx0] + frac * (buf[idx1] - buf[idx0]);
 }
 
+float WowFlutterModule::InterpolateCubic(const float* buf, size_t size, float index)
+{
+    // 4-point cubic interpolation (Hermite)
+    int idx1 = static_cast<int>(std::floor(index));
+    float frac = index - static_cast<float>(idx1);
+
+    int idx0 = idx1 - 1;
+    int idx2 = idx1 + 1;
+    int idx3 = idx1 + 2;
+
+    // Wrap indices
+    while(idx0 < 0) idx0 += static_cast<int>(size);
+    while(idx1 < 0) idx1 += static_cast<int>(size);
+    while(idx2 < 0) idx2 += static_cast<int>(size);
+    while(idx3 < 0) idx3 += static_cast<int>(size);
+    idx0 %= static_cast<int>(size);
+    idx1 %= static_cast<int>(size);
+    idx2 %= static_cast<int>(size);
+    idx3 %= static_cast<int>(size);
+
+    float y0 = buf[idx0];
+    float y1 = buf[idx1];
+    float y2 = buf[idx2];
+    float y3 = buf[idx3];
+
+    // Hermite interpolation
+    float c0 = y1;
+    float c1 = 0.5f * (y2 - y0);
+    float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+    float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+
+    return ((c3 * frac + c2) * frac + c1) * frac + c0;
+}
+
 void WowFlutterModule::Process(float** in, float** out, size_t size)
 {
     const float amount = smoothedAmount_;
@@ -173,8 +207,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         if(readIndexL < 0.0f) readIndexL += static_cast<float>(delayBufSize_);
         if(readIndexR < 0.0f) readIndexR += static_cast<float>(delayBufSize_);
 
-        float delayedL = InterpolateLinear(delayBufL_.get(), delayBufSize_, readIndexL);
-        float delayedR = InterpolateLinear(delayBufR_.get(), delayBufSize_, readIndexR);
+        float delayedL = InterpolateCubic(delayBufL_.get(), delayBufSize_, readIndexL);
+        float delayedR = InterpolateCubic(delayBufR_.get(), delayBufSize_, readIndexR);
 
         delayBufL_[writeIndex_] = xL;
         delayBufR_[writeIndex_] = xR;

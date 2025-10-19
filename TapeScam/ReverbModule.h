@@ -19,5 +19,11 @@ class ReverbModule
 
     daisysp::ReverbSc reverb_;
 
+    // Pre-filter states to remove high-frequency artifacts before reverb
+    float preFilterL1_ = 0.0f;
+    float preFilterL2_ = 0.0f;
+    float preFilterR1_ = 0.0f;
+    float preFilterR2_ = 0.0f;
+
     static constexpr float kMixSmooth = 0.01f;
 };

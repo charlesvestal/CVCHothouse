@@ -19,6 +19,7 @@ class WowFlutterModule
 
   private:
     float InterpolateLinear(const float* buf, size_t size, float index);
+    float InterpolateCubic(const float* buf, size_t size, float index);
 
     float sampleRate_ = 48000.0f;
     float invSampleRate_ = 1.0f;
@@ -51,6 +52,7 @@ class WowFlutterModule
     size_t writeIndex_ = 0;
     float baseDelaySamplesL_ = 0.0f;
     float baseDelaySamplesR_ = 0.0f;
+
 
     static constexpr float kAmountSmooth = 0.005f;
     static constexpr float kDriftSmooth  = 0.0008f;
