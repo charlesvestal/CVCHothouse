@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <memory>
+#include <cstdint>
 #include "daisysp.h"
 
 class WowFlutterModule
@@ -28,6 +29,7 @@ class WowFlutterModule
 
     float phaseWow_     = 0.0f;
     float phaseFlutter_ = 0.0f;
+    float wowDrift_     = 0.0f;
 
     static constexpr size_t kMaxDelaySamples = 48000;
     std::unique_ptr<float[]> delayBufL_;
@@ -37,5 +39,10 @@ class WowFlutterModule
     float baseDelaySamples_ = 0.0f;
 
     static constexpr float kAmountSmooth = 0.005f;
+    static constexpr float kDriftSmooth  = 0.0008f;
+    uint32_t randState_ = 0x1234567u;
+
+    float NextRand();
+    float NextRandCentered();
 };
 

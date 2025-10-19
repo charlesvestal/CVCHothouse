@@ -20,6 +20,9 @@ void WowFlutterModule::Init(float sampleRate)
 
     phaseWow_     = 0.0f;
     phaseFlutter_ = 0.0f;
+    wowDrift_     = 0.0f;
+
+    randState_ ^= static_cast<uint32_t>(sampleRate_);
 
     delayBufSize_ = kMaxDelaySamples;
     delayBufL_.reset(new float[delayBufSize_]);
@@ -28,7 +31,7 @@ void WowFlutterModule::Init(float sampleRate)
     std::fill(delayBufR_.get(), delayBufR_.get() + delayBufSize_, 0.0f);
 
     writeIndex_ = 0;
-    baseDelaySamples_ = 1200.0f;
+    baseDelaySamples_ = std::min(sampleRate_ * 0.015f, static_cast<float>(delayBufSize_) - 4.0f);
 }
 
 void WowFlutterModule::SetAmount(float amount)
@@ -43,12 +46,13 @@ void WowFlutterModule::UpdateControls()
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
 
     const float amt = smoothedAmount_;
-    wowDepth_     = amt * 0.005f;
-    wowRate_      = 0.1f + amt * 1.9f;
-    flutterDepth_ = amt * 0.0025f;
-    flutterRate_  = 4.0f + amt * 16.0f;
-}
+    float shaped = amt * amt;
+    wowDepth_     = shaped * 0.035f;          // +/-3.5% speed at max
+    wowRate_      = 0.05f + shaped * 0.95f;
+    flutterDepth_ = amt * 0.005f;
+    flutterRate_  = 6.0f + amt * 24.0f;
 
+}
 float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float index)
 {
     int idx0 = static_cast<int>(floorf(index));
@@ -94,9 +98,15 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         if(phaseFlutter_ >= 1.0f)
             phaseFlutter_ -= 1.0f;
 
-        float modWow  = sinf(2.0f * static_cast<float>(M_PI) * phaseWow_) * wowDepth;
+        wowDrift_ += kDriftSmooth * (NextRandCentered() - wowDrift_);
+        float modWowSin = sinf(2.0f * static_cast<float>(M_PI) * phaseWow_) * wowDepth;
+        float modWow    = modWowSin + wowDrift_ * wowDepth * 1.0f;
         float modFlutter = sinf(2.0f * static_cast<float>(M_PI) * phaseFlutter_) * flutterDepth;
-        float speedMod = 1.0f + modWow + modFlutter;
+        float speedMod   = 1.0f + modWow + modFlutter;
+        const float minMod = 0.45f;
+        const float maxMod = 1.55f;
+        if(speedMod < minMod) speedMod = minMod;
+        else if(speedMod > maxMod) speedMod = maxMod;
         speedMod = (speedMod < 0.8f ? 0.8f : (speedMod > 1.2f ? 1.2f : speedMod));
 
         float delaySamples = baseDelaySamples_ * speedMod;
@@ -119,3 +129,14 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     }
 }
 
+
+float WowFlutterModule::NextRand()
+{
+    randState_ = randState_ * 1664525u + 1013904223u;
+    return static_cast<float>(randState_) * 2.3283064365386963e-10f;
+}
+
+float WowFlutterModule::NextRandCentered()
+{
+    return NextRand() * 2.0f - 1.0f;
+}
