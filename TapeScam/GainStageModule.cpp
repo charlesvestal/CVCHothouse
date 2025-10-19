@@ -173,60 +173,36 @@ void GainStageModule::UpdateControls()
     params_ = pendingParams_;
     paramsDirty_ = false;
 
+    float drive = params_.driveNorm;
+    if(drive < 0.0f) drive = 0.0f;
+    if(drive > 1.0f) drive = 1.0f;
+    params_.driveNorm    = drive;
+    params_.trimGainDb   = drive * 20.0f;
+    params_.channelGainDb = drive * 20.0f;
+    params_.character    = drive;
+    params_.masterVolDb  = 0.0f;
+    params_.bassGainDb   = 0.0f;
+    params_.trebleGainDb = 0.0f;
+    params_.inputType    = 0;
+    params_.clippingType = 0;
+    params_.toneMode     = 0;
+
     trimGainLin_    = dBToLin(params_.trimGainDb);
     channelGainLin_ = dBToLin(params_.channelGainDb);
-    masterVolLin_   = dBToLin(params_.masterVolDb);
-    inputCompGain_  = InputCompensationGain(params_.inputType);
+    masterVolLin_   = 1.0f;
+    inputCompGain_  = 1.0f;
 
     bassModeOffsetDb_   = 0.0f;
     trebleModeOffsetDb_ = 0.0f;
     characterDriveScale_ = 1.0f;
     loFiEnabled_ = false;
 
-    switch(params_.toneMode)
-    {
-        case 1: // Lo-Fi Cassette
-            bassModeOffsetDb_   = -1.5f;
-            trebleModeOffsetDb_ = -3.0f;
-            characterDriveScale_ = 1.5f;
-            loFiEnabled_ = true;
-            break;
-        case 2: // Vintage Tape Warm
-            bassModeOffsetDb_   = 2.0f;
-            trebleModeOffsetDb_ = -2.0f;
-            characterDriveScale_ = 0.8f;
-            break;
-        default:
-            characterDriveScale_ = 1.0f;
-            break;
-    }
+    lastBassSetting_ = std::numeric_limits<float>::quiet_NaN();
+    lastTrebleSetting_ = std::numeric_limits<float>::quiet_NaN();
+    lastToneMode_ = -1;
+    lastLoFiState_ = true;
 
-    const float toneFactor = ToneModeFactor(params_.toneMode);
-    const float pendingBass = (params_.bassGainDb + bassModeOffsetDb_) * toneFactor;
-    const float pendingTreble = (params_.trebleGainDb + trebleModeOffsetDb_) * toneFactor;
-
-    bool filtersDirty = false;
-    if(lastToneMode_ != params_.toneMode)
-    {
-        filtersDirty = true;
-    }
-    if(!std::isfinite(lastBassSetting_) || fabsf(pendingBass - lastBassSetting_) > 0.15f)
-    {
-        filtersDirty = true;
-    }
-    if(!std::isfinite(lastTrebleSetting_) || fabsf(pendingTreble - lastTrebleSetting_) > 0.15f)
-    {
-        filtersDirty = true;
-    }
-    if(loFiEnabled_ != lastLoFiState_)
-    {
-        filtersDirty = true;
-    }
-
-    if(filtersDirty)
-    {
-        ComputeFilterCoeffs();
-    }
+    ComputeFilterCoeffs();
 }
 
 float GainStageModule::ApplyClipping(float inSample) const

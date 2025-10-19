@@ -16,6 +16,7 @@ class GainStageModule
         float bassGainDb;
         float trebleGainDb;
         float character;
+        float driveNorm;
         int   inputType;
         int   clippingType;
         int   toneMode;

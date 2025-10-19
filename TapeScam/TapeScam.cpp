@@ -8,14 +8,6 @@ using clevelandmusicco::Hothouse;
 
 namespace
 {
-constexpr float kTrimMinDb     = 0.0f;
-constexpr float kTrimMaxDb     = 20.0f;
-constexpr float kChannelMinDb  = 0.0f;
-constexpr float kChannelMaxDb  = 20.0f;
-constexpr float kMasterMinDb   = -12.0f;
-constexpr float kMasterMaxDb   = 6.0f;
-constexpr float kToneMinDb     = -12.0f;
-constexpr float kToneMaxDb     = 12.0f;
 }
 
 Hothouse         hw;
@@ -30,25 +22,22 @@ static float sampleRateHz = 48000.0f;
 static uint32_t fs2HoldSamples = 0;
 static uint32_t fs2HoldThreshold = 0;
 
-inline float MapKnobToRange(float knob, float min, float max)
-{
-    return fmap(knob, min, max);
-}
-
 GainStageModule::Params BuildParams()
 {
-    GainStageModule::Params params;
+    GainStageModule::Params params{};
 
-    params.trimGainDb    = MapKnobToRange(hw.GetKnobValue(Hothouse::KNOB_1), kTrimMinDb, kTrimMaxDb);
-    params.channelGainDb = MapKnobToRange(hw.GetKnobValue(Hothouse::KNOB_2), kChannelMinDb, kChannelMaxDb);
-    params.masterVolDb   = MapKnobToRange(hw.GetKnobValue(Hothouse::KNOB_3), kMasterMinDb, kMasterMaxDb);
-    params.bassGainDb    = MapKnobToRange(hw.GetKnobValue(Hothouse::KNOB_4), kToneMinDb, kToneMaxDb);
-    params.trebleGainDb  = MapKnobToRange(hw.GetKnobValue(Hothouse::KNOB_5), kToneMinDb, kToneMaxDb);
-    params.character     = hw.GetKnobValue(Hothouse::KNOB_6);
+    const float drive = hw.GetKnobValue(Hothouse::KNOB_1);
+    params.driveNorm     = drive;
+    params.trimGainDb    = 0.0f;
+    params.channelGainDb = 0.0f;
+    params.masterVolDb   = 0.0f;
+    params.bassGainDb    = 0.0f;
+    params.trebleGainDb  = 0.0f;
+    params.character     = drive;
 
-    params.inputType    = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1));
-    params.clippingType = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2));
-    params.toneMode     = static_cast<int>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3));
+    params.inputType    = 0;
+    params.clippingType = 0;
+    params.toneMode     = 0;
     params.debugMode    = debugMode;
 
     params.bypass       = bypassEnabled;
