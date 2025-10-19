@@ -115,8 +115,8 @@ void GainStageModule::SetPendingParams(const Params& params)
 
 void GainStageModule::AdjustHeadroom(float headroomDb)
 {
-    // Clamp to reasonable range: -6dB to +3dB
-    headroomAdjustmentDb_ = Clamp(headroomDb, -6.0f, 3.0f);
+    // Clamp to reasonable range: -12dB to +6dB (allows accumulation from multiple toggles)
+    headroomAdjustmentDb_ = Clamp(headroomDb, -12.0f, 6.0f);
     paramsDirty_ = true;
 }
 

@@ -49,7 +49,8 @@ void TapeSatModule::SetDrive(float normalizedDrive)
 void TapeSatModule::SetDriveMultiplier(float multiplier)
 {
     // Ensure multiplier is positive and within reasonable range
-    driveMultiplier_ = Clamp(multiplier, 0.8f, 1.5f);
+    // Expanded range to allow more extreme speed/age combinations
+    driveMultiplier_ = Clamp(multiplier, 0.3f, 3.0f);
     paramsDirty_ = true;
 }
 

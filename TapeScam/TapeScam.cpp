@@ -204,26 +204,26 @@ void HandleTapeSpeedToggle()
         switch(speedMode)
         {
             case SPEED_HIGH:
-                hfRollOffCutoff       = 20000.0f;  // Extended HF response
-                speedHeadroomAdj_dB   = 0.0f;      // Full headroom
-                speedSaturationMul    = 0.8f;      // Less saturation
+                hfRollOffCutoff       = 20000.0f;  // Extended HF response (bright!)
+                speedHeadroomAdj_dB   = 3.0f;      // Boosted headroom (loud, clean)
+                speedSaturationMul    = 0.5f;      // Much less saturation (pristine)
                 break;
 
             case SPEED_STANDARD:
-                hfRollOffCutoff       = 16000.0f;  // Normal HF rolloff
+                hfRollOffCutoff       = 14000.0f;  // Normal HF rolloff
                 speedHeadroomAdj_dB   = -1.0f;     // Slightly reduced headroom
-                speedSaturationMul    = 1.0f;      // Normal saturation
+                speedSaturationMul    = 1.0f;      // Normal saturation (baseline)
                 break;
 
             case SPEED_LOFI:
-                hfRollOffCutoff       = 12000.0f;  // Dark, reduced HF
-                speedHeadroomAdj_dB   = -2.5f;     // Reduced headroom
-                speedSaturationMul    = 1.2f;      // More saturation
+                hfRollOffCutoff       = 8000.0f;   // Very dark, telephone-like HF
+                speedHeadroomAdj_dB   = -6.0f;     // Heavily reduced headroom (crushed)
+                speedSaturationMul    = 2.0f;      // Heavy saturation (distorted)
                 break;
 
             default:
                 // Should never reach here due to switch above, but safety first
-                hfRollOffCutoff       = 16000.0f;
+                hfRollOffCutoff       = 14000.0f;
                 speedHeadroomAdj_dB   = -1.0f;
                 speedSaturationMul    = 1.0f;
                 break;
