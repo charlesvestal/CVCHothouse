@@ -1,0 +1,6 @@
+# Daisy build artifacts
+**/build/
+**/*.elf
+**/*.bin
+**/*.hex
+.DS_Store
