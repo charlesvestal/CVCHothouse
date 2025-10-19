@@ -40,6 +40,18 @@ void HissDropModule::SetAmount(float amount)
     targetAmount_ = Clamp(amount, 0.0f, 1.0f);
 }
 
+void HissDropModule::SetHissMultiplier(float multiplier)
+{
+    // Ensure multiplier is positive and within reasonable range
+    hissMultiplier_ = Clamp(multiplier, 0.1f, 3.0f);
+}
+
+void HissDropModule::SetDropoutRateMultiplier(float multiplier)
+{
+    // Ensure multiplier is positive and within reasonable range
+    dropoutRateMultiplier_ = Clamp(multiplier, 0.1f, 3.0f);
+}
+
 void HissDropModule::UpdateControls()
 {
     const float delta = targetAmount_ - smoothedAmount_;
@@ -50,11 +62,14 @@ void HissDropModule::UpdateControls()
     }
 
     const float amt = smoothedAmount_;
-    hissLevelDb_  = kMinHissDb + amt * (kMaxHissDb - kMinHissDb);
+    // Apply hiss multiplier to the calculated hiss level
+    float baseHissDb = kMinHissDb + amt * (kMaxHissDb - kMinHissDb);
+    hissLevelDb_  = baseHissDb + 20.0f * log10f(hissMultiplier_); // Convert multiplier to dB
     hissLevelLin_ = DbToLin(hissLevelDb_);
     noiseColorFactor_ = amt;
 
-    dropoutRate_  = amt * 5.0f;
+    // Apply dropout rate multiplier
+    dropoutRate_  = amt * 5.0f * dropoutRateMultiplier_;
     dropoutDepth_ = Clamp(amt, 0.0f, 1.0f);
     dropoutDurationSamples_ = (0.01f + amt * 0.14f) * sampleRate_;
     if(dropoutDurationSamples_ < 1.0f)

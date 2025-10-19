@@ -46,6 +46,13 @@ void TapeSatModule::SetDrive(float normalizedDrive)
     paramsDirty_ = true;
 }
 
+void TapeSatModule::SetDriveMultiplier(float multiplier)
+{
+    // Ensure multiplier is positive and within reasonable range
+    driveMultiplier_ = Clamp(multiplier, 0.8f, 1.5f);
+    paramsDirty_ = true;
+}
+
 void TapeSatModule::UpdateControls()
 {
     if(!paramsDirty_)
@@ -64,7 +71,8 @@ void TapeSatModule::UpdateControls()
     const float drive = smoothedDrive_;
     tapeDrive_dB_         = drive * kMaxDriveDb;
     tapeDriveLin_         = dBToLin(tapeDrive_dB_);
-    tapeSaturationFactor_ = drive;
+    // Apply drive multiplier to saturation factor
+    tapeSaturationFactor_ = drive * driveMultiplier_;
     tapeCompressionRatio_ = kCompMin + drive * kCompRange;
     hfRollOffCutoff_      = kMaxRollOffHz - drive * (kMaxRollOffHz - kMinRollOffHz);
     biasGain_             = 1.0f + drive * kBiasRange;

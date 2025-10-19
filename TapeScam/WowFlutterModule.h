@@ -10,6 +10,10 @@ class WowFlutterModule
   public:
     void Init(float sampleRate);
     void SetAmount(float amount);
+
+    // Set depth multiplier for tape age/condition (1.0 = normal)
+    void SetDepthMultiplier(float multiplier);
+
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
 
@@ -21,6 +25,9 @@ class WowFlutterModule
 
     float targetAmount_   = 0.0f;
     float smoothedAmount_ = 0.0f;
+
+    // Multiplier for tape age/condition
+    float depthMultiplier_ = 1.0f;
 
     float wowAmount_    = 0.0f;
     float wowRateHz_    = 0.1f;

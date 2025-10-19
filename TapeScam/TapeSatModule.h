@@ -11,6 +11,9 @@ class TapeSatModule
     // Set target drive (0…1) and mark parameters dirty
     void SetDrive(float normalizedDrive);
 
+    // Set drive multiplier for tape age/condition (1.0 = normal)
+    void SetDriveMultiplier(float multiplier);
+
     // Call each control refresh to smooth and update filter coefficients
     void UpdateControls();
 
@@ -31,6 +34,9 @@ class TapeSatModule
     // Target drive (0..1) from UI
     float targetDrive_ = 0.0f;
     float smoothedDrive_ = 0.0f;
+
+    // Multiplier for tape age/condition
+    float driveMultiplier_ = 1.0f;
 
     // Derived parameters
     float tapeDrive_dB_ = 0.0f;

@@ -52,6 +52,12 @@ void WowFlutterModule::SetAmount(float amount)
     targetAmount_ = Clamp(amount, 0.0f, 1.0f);
 }
 
+void WowFlutterModule::SetDepthMultiplier(float multiplier)
+{
+    // Ensure multiplier is positive and within reasonable range
+    depthMultiplier_ = Clamp(multiplier, 0.5f, 2.0f);
+}
+
 void WowFlutterModule::UpdateControls()
 {
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
@@ -59,9 +65,10 @@ void WowFlutterModule::UpdateControls()
     const float amt = smoothedAmount_;
     const float shaped = Clamp(amt * amt, 0.0f, 1.0f);
 
-    wowAmount_     = shaped;
+    // Apply depth multiplier to wow and flutter amounts
+    wowAmount_     = shaped * depthMultiplier_;
     wowRateHz_     = 0.01f + shaped * 0.05f;      // 0.01 – 0.06 Hz
-    flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f);
+    flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f) * depthMultiplier_;
     flutterRateHz_ = 4.5f + flutterAmount_ * 8.0f; // 4.5 – ~7.3 Hz
 }
 

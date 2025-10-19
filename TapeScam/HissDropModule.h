@@ -11,6 +11,11 @@ class HissDropModule
   public:
     void Init(float sampleRate, size_t numChannels);
     void SetAmount(float amount);
+
+    // Set multipliers for tape age/condition (1.0 = normal)
+    void SetHissMultiplier(float multiplier);
+    void SetDropoutRateMultiplier(float multiplier);
+
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
 
@@ -43,6 +48,10 @@ class HissDropModule
 
     float targetAmount_    = 0.0f;
     float smoothedAmount_  = 0.0f;
+
+    // Multipliers for tape age/condition
+    float hissMultiplier_        = 1.0f;
+    float dropoutRateMultiplier_ = 1.0f;
 
     float hissLevelDb_     = -60.0f;
     float hissLevelLin_    = 0.0f;

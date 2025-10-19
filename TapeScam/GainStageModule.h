@@ -27,6 +27,10 @@ class GainStageModule
 
     void Init(float sampleRate);
     void SetPendingParams(const Params& params);
+
+    // Adjust headroom for tape age/condition (0dB = no change, negative = more headroom)
+    void AdjustHeadroom(float headroomDb);
+
     void UpdateControls();
     void Process(const float* const* in, float** out, size_t size);
 
@@ -98,6 +102,9 @@ class GainStageModule
     float inputCompGain_ = 1.0f;
     float characterDriveScale_ = 1.0f;
     float boostFactor_ = 1.8f;
+
+    // Headroom adjustment for tape age/condition
+    float headroomAdjustmentDb_ = 0.0f;
     float softClipBase_ = 1.2f;
     float hardClipBaseThreshold_ = 0.9f;
 

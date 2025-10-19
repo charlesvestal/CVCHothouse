@@ -113,6 +113,13 @@ void GainStageModule::SetPendingParams(const Params& params)
     paramsDirty_   = true;
 }
 
+void GainStageModule::AdjustHeadroom(float headroomDb)
+{
+    // Clamp to reasonable range: -6dB to +3dB
+    headroomAdjustmentDb_ = Clamp(headroomDb, -6.0f, 3.0f);
+    paramsDirty_ = true;
+}
+
 float GainStageModule::ToneModeFactor(int toneMode) const
 {
     switch(toneMode)
@@ -189,7 +196,8 @@ void GainStageModule::UpdateControls()
 
     trimGainLin_    = dBToLin(params_.trimGainDb);
     channelGainLin_ = dBToLin(params_.channelGainDb);
-    masterVolLin_   = 1.0f;
+    // Apply headroom adjustment to master volume
+    masterVolLin_   = dBToLin(headroomAdjustmentDb_);
     inputCompGain_  = 1.0f;
 
     bassModeOffsetDb_   = 0.0f;
