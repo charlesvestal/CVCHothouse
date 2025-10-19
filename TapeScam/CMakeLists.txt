@@ -14,6 +14,7 @@ FetchContent_MakeAvailable(DaisySP)
 add_executable(TapeScam
   TapeScam.cpp
   GainStageModule.cpp
+  TapeSatModule.cpp
 )
 if(NOT DEFINED DAISYSP_SOURCE_DIR)
   message(FATAL_ERROR "DAISYSP_SOURCE_DIR not defined; DaisySP FetchContent failed?")

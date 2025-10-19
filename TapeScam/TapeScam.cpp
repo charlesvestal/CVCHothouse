@@ -1,4 +1,5 @@
 #include "GainStageModule.h"
+#include "TapeSatModule.h"
 #include "daisysp.h"
 #include "hothouse.h"
 
@@ -12,6 +13,7 @@ namespace
 
 Hothouse         hw;
 GainStageModule  gainStage;
+TapeSatModule    tapeSat;
 Led              ledBypass;
 Led              ledBoost;
 
@@ -93,6 +95,15 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     gainStage.SetPendingParams(params);
     gainStage.UpdateControls();
     gainStage.Process(in, out, size);
+
+    const float tapeDrive = hw.GetKnobValue(Hothouse::KNOB_2);
+    tapeSat.SetDrive(tapeDrive);
+    tapeSat.UpdateControls();
+
+    if(!bypassEnabled && debugMode < 3)
+    {
+        tapeSat.Process(out, size);
+    }
 }
 
 int main()
@@ -108,6 +119,7 @@ int main()
     ledBoost.Init(hw.seed.GetPin(Hothouse::LED_2), false);
 
     gainStage.Init(sampleRateHz);
+    tapeSat.Init(sampleRateHz);
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
