@@ -5,7 +5,7 @@ TARGET = tapescam
 USE_DAISYSP_LGPL=1
 
 # Sources and shared Hothouse support files
-CPP_SOURCES = TapeScam.cpp GainStageModule.cpp TapeSatModule.cpp WowFlutterModule.cpp HissDropModule.cpp ../hothouse.cpp
+CPP_SOURCES = TapeScam.cpp GainStageModule.cpp TapeSatModule.cpp WowFlutterModule.cpp HissDropModule.cpp ToneModule.cpp ../hothouse.cpp
 C_INCLUDES = -I..
 
 # Library Locations

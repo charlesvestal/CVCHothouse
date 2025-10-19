@@ -17,6 +17,7 @@ add_executable(TapeScam
   TapeSatModule.cpp
   WowFlutterModule.cpp
   HissDropModule.cpp
+  ToneModule.cpp
 )
 if(NOT DEFINED DAISYSP_SOURCE_DIR)
   message(FATAL_ERROR "DAISYSP_SOURCE_DIR not defined; DaisySP FetchContent failed?")

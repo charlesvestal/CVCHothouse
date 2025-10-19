@@ -2,6 +2,7 @@
 #include "TapeSatModule.h"
 #include "WowFlutterModule.h"
 #include "HissDropModule.h"
+#include "ToneModule.h"
 #include <algorithm>
 #include <cmath>
 #include "daisysp.h"
@@ -21,6 +22,7 @@ GainStageModule  gainStage;
 TapeSatModule    tapeSat;
 WowFlutterModule tapeWobble;
 HissDropModule   tapeNoise;
+ToneModule      tapeTone;
 Led              ledBypass;
 Led              ledBoost;
 
@@ -81,11 +83,15 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     tapeNoise.SetAmount(hw.GetKnobValue(Hothouse::KNOB_4));
     tapeNoise.UpdateControls();
 
+    tapeTone.SetAmount(hw.GetKnobValue(Hothouse::KNOB_5));
+    tapeTone.UpdateControls();
+
     if(!bypassEnabled)
     {
         tapeSat.Process(out, size);
         tapeWobble.Process(out, out, size);
         tapeNoise.Process(out, out, size);
+        tapeTone.Process(out, out, size);
     }
 
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
@@ -128,6 +134,7 @@ int main()
     tapeWobble.Init(sampleRateHz);
     tapeWobble.SetAmount(0.0f);
     tapeNoise.Init(sampleRateHz, 2);
+    tapeTone.Init(sampleRateHz, 2);
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
