@@ -44,7 +44,7 @@ class WowFlutterModule
     float readStateR_   = 0.0f;
     float flutterJitL_  = 0.0f;
     float flutterJitR_  = 0.0f;
-    static constexpr size_t kMaxDelaySamples = 48000;
+    static constexpr size_t kMaxDelaySamples = 2048;  // ~42ms at 48kHz, plenty for wow/flutter
     std::unique_ptr<float[]> delayBufL_;
     std::unique_ptr<float[]> delayBufR_;
     size_t delayBufSize_ = kMaxDelaySamples;

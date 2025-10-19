@@ -381,16 +381,6 @@ int main()
 
     // Initialize USB logging for debugging
     hw.seed.StartLog(true);
-
-    // Wait for USB serial connection (blink LED1 while waiting)
-    hw.seed.PrintLine("Waiting for USB connection...");
-    for(int i = 0; i < 50; i++)  // Wait up to 5 seconds
-    {
-        hw.seed.SetLed(i % 2 == 0);
-        hw.seed.DelayMs(100);
-    }
-    hw.seed.SetLed(false);
-
     hw.seed.PrintLine("=== TapeScam Starting ===");
 
     sampleRateHz = hw.AudioSampleRate();
