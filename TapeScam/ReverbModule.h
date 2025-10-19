@@ -1,8 +1,9 @@
 #pragma once
 
-#include "daisysp.h"
+#include "SimpleReverb.h"
 
-// Minimal reverb wrapper - just DaisySP ReverbSc, no extra buffers
+// Simple reverb module using custom algorithm
+// More stable with modulated inputs than ReverbSc
 class ReverbModule
 {
   public:
@@ -17,7 +18,7 @@ class ReverbModule
     float mix_ = 0.0f;
     float targetMix_ = 0.0f;
 
-    daisysp::ReverbSc reverb_;
+    SimpleReverb reverb_;
 
     static constexpr float kMixSmooth = 0.01f;
 };

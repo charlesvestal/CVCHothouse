@@ -290,13 +290,13 @@ void HandleReverbToggle()
                 break;
 
             case REV_LIGHT_ROOM:
-                reverbMix       = 0.15f;  // 15% wet
-                reverbDecayTime = 1.0f;   // 1 second tail
+                reverbMix       = 0.25f;  // 25% wet
+                reverbDecayTime = 2.0f;   // 2 second tail
                 break;
 
             case REV_PLATE_HALL:
-                reverbMix       = 0.25f;  // 25% wet
-                reverbDecayTime = 3.0f;   // 3 second tail
+                reverbMix       = 0.40f;  // 40% wet
+                reverbDecayTime = 5.0f;   // 5 second tail
                 break;
 
             default:

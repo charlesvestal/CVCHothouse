@@ -9,10 +9,10 @@ static float DecayTimeToFeedback(float decaySeconds)
     if(decaySeconds > 10.0f)
         decaySeconds = 10.0f;
 
-    // Map decay time to feedback - very conservative
-    // 1.0s -> 0.65, 3.0s -> 0.75
-    float feedback = 0.55f + (decaySeconds / 10.0f) * 0.2f;
-    return feedback < 0.75f ? feedback : 0.75f;
+    // Map decay time to feedback
+    // 1.0s -> 0.7, 3.0s -> 0.85
+    float feedback = 0.6f + (decaySeconds / 10.0f) * 0.25f;
+    return feedback < 0.9f ? feedback : 0.9f;
 }
 
 int ReverbModule::Init(float sampleRate)
@@ -21,14 +21,11 @@ int ReverbModule::Init(float sampleRate)
     mix_ = 0.0f;
     targetMix_ = 0.0f;
 
-    // Initialize DaisySP reverb - returns 0 on success, 1 on failure
-    int result = reverb_.Init(sampleRate_);
-    if(result == 0)
-    {
-        reverb_.SetFeedback(0.6f);   // Lower default to reduce artifact amplification
-        reverb_.SetLpFreq(8000.0f);  // More aggressive internal damping
-    }
-    return result;
+    reverb_.Init(sampleRate_);
+    reverb_.SetFeedback(0.7f);
+    reverb_.SetDamping(0.4f);  // Some HF damping
+
+    return 0;  // Simple reverb always succeeds
 }
 
 void ReverbModule::SetMix(float mix)
@@ -40,6 +37,10 @@ void ReverbModule::SetDecayTime(float seconds)
 {
     float feedback = DecayTimeToFeedback(seconds);
     reverb_.SetFeedback(feedback);
+
+    // Adjust damping based on decay time (longer = less damping)
+    float damping = 0.6f - (seconds / 10.0f) * 0.3f;
+    reverb_.SetDamping(damping);
 }
 
 void ReverbModule::UpdateControls()
@@ -78,20 +79,13 @@ void ReverbModule::Process(float** in, float** out, size_t size)
         float inL = in[0][i];
         float inR = in[1][i];
 
-        // Simple hard clip to ±0.9 to prevent extreme signals
-        inL = fmaxf(-0.9f, fminf(0.9f, inL));
-        inR = fmaxf(-0.9f, fminf(0.9f, inR));
-
-        // Process through reverb
-        float reverbL = 0.0f, reverbR = 0.0f;
+        // Process through simple reverb
+        float reverbL, reverbR;
         reverb_.Process(inL, inR, &reverbL, &reverbR);
 
-        // Denormal protection
-        if(fabsf(reverbL) < 1e-10f) reverbL = 0.0f;
-        if(fabsf(reverbR) < 1e-10f) reverbR = 0.0f;
-
-        // Mix dry and wet signals
-        out[0][i] = inL * dryMix + reverbL * wetMix;
-        out[1][i] = inR * dryMix + reverbR * wetMix;
+        // Mix dry and wet signals with gain compensation
+        const float wetGain = 0.25f;  // SimpleReverb outputs hot signal
+        out[0][i] = inL * dryMix + reverbL * wetMix * wetGain;
+        out[1][i] = inR * dryMix + reverbR * wetMix * wetGain;
     }
 }
