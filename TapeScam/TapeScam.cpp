@@ -300,20 +300,48 @@ int main()
     hw.SetAudioBlockSize(4);
     hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
+    // Initialize USB logging for debugging
+    hw.seed.StartLog(true);
+
+    // Wait for USB serial connection (blink LED1 while waiting)
+    hw.seed.PrintLine("Waiting for USB connection...");
+    for(int i = 0; i < 50; i++)  // Wait up to 5 seconds
+    {
+        hw.seed.SetLed(i % 2 == 0);
+        hw.seed.DelayMs(100);
+    }
+    hw.seed.SetLed(false);
+
+    hw.seed.PrintLine("=== TapeScam Starting ===");
+
     sampleRateHz = hw.AudioSampleRate();
+    hw.seed.PrintLine("Sample rate: %d", (int)sampleRateHz);
 
     ledBypass.Init(hw.seed.GetPin(Hothouse::LED_1), false);
     ledBoost.Init(hw.seed.GetPin(Hothouse::LED_2), false);
+    hw.seed.PrintLine("LEDs initialized");
 
+    hw.seed.PrintLine("Initializing modules...");
     gainStage.Init(sampleRateHz);
+    hw.seed.PrintLine("  - GainStage OK");
+
     tapeSat.Init(sampleRateHz);
+    hw.seed.PrintLine("  - TapeSat OK");
+
     tapeWobble.Init(sampleRateHz);
     tapeWobble.SetAmount(0.0f);
-    tapeNoise.Init(sampleRateHz, 2);
-    tapeTone.Init(sampleRateHz, 2);
+    hw.seed.PrintLine("  - WowFlutter OK");
 
+    tapeNoise.Init(sampleRateHz, 2);
+    hw.seed.PrintLine("  - HissDropout OK");
+
+    tapeTone.Init(sampleRateHz, 2);
+    hw.seed.PrintLine("  - Tone OK");
+
+    hw.seed.PrintLine("Starting audio...");
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
+    hw.seed.PrintLine("Audio started - running!");
 
     while(true)
     {
