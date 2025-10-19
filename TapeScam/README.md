@@ -84,8 +84,10 @@ Custom Freeverb-style reverb using 4 comb filters + 2 allpass filters per channe
 - Cubic Hermite interpolation for smooth pitch modulation
 - Discontinuity guards prevent buffer wrap artifacts
 - Modulation sources:
-  - Wow: 0.01-0.06 Hz sine waves
+  - Wow: 0.02-0.12 Hz sine waves (wider, slower warble)
+  - Wow depth: up to ±20ms (±2.4% pitch variation)
   - Flutter: 4.5-7.3 Hz sine with jitter
+  - Flutter depth: up to ±1ms
   - Drift: Slow random walk
 
 ### Known Characteristics

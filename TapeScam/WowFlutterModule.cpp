@@ -75,7 +75,7 @@ void WowFlutterModule::UpdateControls()
 
     // Apply depth multiplier to wow and flutter amounts
     wowAmount_     = shaped * depthMultiplier_;
-    wowRateHz_     = 0.01f + shaped * 0.05f;      // 0.01 – 0.06 Hz
+    wowRateHz_     = 0.02f + shaped * 0.10f;      // 0.02 – 0.12 Hz (more noticeable warble)
     flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f) * depthMultiplier_;
     flutterRateHz_ = 4.5f + flutterAmount_ * 8.0f; // 4.5 – ~7.3 Hz
 }
@@ -177,8 +177,8 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
         flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
 
-        const float wowDepthSec   = 0.0085f * wowAmt;                       // up to ~8.5 ms swing
-        const float flutterDepthSec = 0.00035f * std::sqrt(std::max(flutterAmt, 0.0f));     // gentle flutter
+        const float wowDepthSec   = 0.020f * wowAmt;                       // up to ~20 ms swing (wider pitch modulation)
+        const float flutterDepthSec = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f));     // more pronounced flutter
 
         float wowL = std::sin(kTwoPi * wowPhaseL_);
         float wowR = std::sin(kTwoPi * wowPhaseR_);
