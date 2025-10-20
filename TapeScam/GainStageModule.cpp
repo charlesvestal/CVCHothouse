@@ -101,6 +101,7 @@ void GainStageModule::Init(float sampleRate)
     }
     for(auto& lp : loFiLowpass_)
     {
+        lp.z = 0.0f;  // Explicit state reset
         lp.SetCutoff(sampleRate_, kLoFiCutHz);
     }
 
@@ -338,6 +339,12 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
             selectedL = SafeLimit(selectedL);
             selectedR = SafeLimit(selectedR);
         }
+
+        // Denormal protection: flush very small values to zero
+        // This prevents CPU slowdown and potential L/R asymmetry from denormal handling
+        constexpr float kDenormalThreshold = 1.0e-15f;
+        if(fabsf(selectedL) < kDenormalThreshold) selectedL = 0.0f;
+        if(fabsf(selectedR) < kDenormalThreshold) selectedR = 0.0f;
 
         out[0][i] = selectedL;
         out[1][i] = selectedR;
