@@ -28,11 +28,27 @@ void TapeSatModule::Init(float sampleRate)
     tapeCompressionRatio_ = 1.0f;
     hfRollOffCutoff_ = kMaxRollOffHz;
     biasGain_ = 1.0f;
+    asymmetryAmount_ = 0.0f;
+    bassCompressionRatio_ = 1.0f;
 
+    compEnvelopeL_ = 0.0f;
+    compEnvelopeR_ = 0.0f;
+
+    // Initialize HF rolloff filters
     for(auto& svf : hfRollOff_)
     {
         svf.Init(sampleRate_);
         svf.SetFreq(hfRollOffCutoff_);
+        svf.SetRes(0.707f);
+        svf.SetDrive(1.0f);
+    }
+
+    // Initialize crossover filters for frequency-dependent saturation
+    // Split at ~400Hz (bass/mids-highs)
+    for(auto& svf : crossover_)
+    {
+        svf.Init(sampleRate_);
+        svf.SetFreq(400.0f);
         svf.SetRes(0.707f);
         svf.SetDrive(1.0f);
     }
@@ -87,9 +103,19 @@ void TapeSatModule::UpdateControls()
     const float drive = smoothedDrive_;
     tapeDrive_dB_         = drive * kMaxDriveDb;
     tapeDriveLin_         = dBToLin(tapeDrive_dB_);
+
     // Apply drive multiplier to saturation factor
     tapeSaturationFactor_ = drive * driveMultiplier_;
+
+    // High-frequency compression is tighter (faster, more aggressive)
     tapeCompressionRatio_ = kCompMin + drive * kCompRange;
+
+    // Bass compression is looser (more tape-like, slower)
+    bassCompressionRatio_ = kCompMin + drive * (kCompRange * 0.6f);
+
+    // Asymmetry creates even-order harmonics (tape hysteresis)
+    // More saturation = more asymmetric transfer function
+    asymmetryAmount_ = drive * 0.25f;  // Up to 25% asymmetry at full drive
 
     // Use override cutoff if set, otherwise calculate based on drive
     if(hfRolloffOverride_ > 0.0f)
@@ -126,6 +152,52 @@ float TapeSatModule::SimpleCompressor(float inSample, float ratio) const
     return inSample >= 0.0f ? compressed : -compressed;
 }
 
+float TapeSatModule::AsymmetricSaturation(float input, float asymmetry) const
+{
+    // Asymmetric transfer function creates even-order harmonics
+    // Tape has magnetic hysteresis which is inherently asymmetric
+    // Positive/negative excursions saturate differently
+
+    if(input > 0.0f)
+    {
+        // Positive side saturates harder (like hitting tape saturation)
+        return tanhf(input * (1.0f + asymmetry));
+    }
+    else
+    {
+        // Negative side saturates softer (tape bias effect)
+        return tanhf(input * (1.0f - asymmetry * 0.5f));
+    }
+}
+
+float TapeSatModule::TapeSaturationCurve(float input, float satAmount) const
+{
+    // Multi-stage tape saturation:
+    // 1. Soft knee compression (low levels)
+    // 2. Asymmetric saturation (mid levels) - creates even harmonics
+    // 3. Hard limiting (high levels)
+
+    const float absIn = fabsf(input);
+
+    if(absIn < 0.3f)
+    {
+        // Low level - mostly clean with slight compression
+        return input * (1.0f + satAmount * 0.1f);
+    }
+    else if(absIn < 0.7f)
+    {
+        // Mid level - asymmetric saturation zone
+        float asymSat = AsymmetricSaturation(input, asymmetryAmount_);
+        // Blend based on saturation amount
+        return input * (1.0f - satAmount) + asymSat * satAmount;
+    }
+    else
+    {
+        // High level - hard tape saturation
+        return tanhf(input * (1.0f + satAmount * 2.0f));
+    }
+}
+
 void TapeSatModule::Process(float** buffers, size_t size)
 {
     if(smoothedDrive_ < kDriveBypass)
@@ -134,22 +206,76 @@ void TapeSatModule::Process(float** buffers, size_t size)
         return;
     }
 
-    const float driveLin   = tapeDriveLin_;
-    const float satFactor  = 1.0f + tapeSaturationFactor_ * 2.0f;
-    const float ratio      = tapeCompressionRatio_;
-    const float bias       = biasGain_;
+    const float driveLin      = tapeDriveLin_;
+    const float satAmount     = tapeSaturationFactor_;
+    const float hfRatio       = tapeCompressionRatio_;
+    const float bassRatio     = bassCompressionRatio_;
+    const float bias          = biasGain_;
+    const float attackCoeff   = compAttackCoeff_;
+    const float releaseCoeff  = compReleaseCoeff_;
 
     for(size_t i = 0; i < size; ++i)
     {
         float xL = buffers[0][i] * driveLin * bias;
         float xR = buffers[1][i] * driveLin * bias;
 
-        xL = tanhf(xL * satFactor);
-        xR = tanhf(xR * satFactor);
+        // Split into bass and mids/highs for frequency-dependent processing
+        crossover_[0].Process(xL);
+        crossover_[1].Process(xR);
 
-        xL = SimpleCompressor(xL, ratio);
-        xR = SimpleCompressor(xR, ratio);
+        float bassL = crossover_[0].Low();
+        float highL = crossover_[0].High();
+        float bassR = crossover_[1].Low();
+        float highR = crossover_[1].High();
 
+        // --- BASS PROCESSING (slower, looser compression) ---
+        // Slow envelope follower for tape-like compression
+        float envL = fabsf(bassL);
+        if(envL > compEnvelopeL_)
+            compEnvelopeL_ += (envL - compEnvelopeL_) * attackCoeff;
+        else
+            compEnvelopeL_ += (envL - compEnvelopeL_) * releaseCoeff;
+
+        float envR = fabsf(bassR);
+        if(envR > compEnvelopeR_)
+            compEnvelopeR_ += (envR - compEnvelopeR_) * attackCoeff;
+        else
+            compEnvelopeR_ += (envR - compEnvelopeR_) * releaseCoeff;
+
+        // Apply slow compression to bass (tape-like)
+        float bassGainL = 1.0f;
+        if(compEnvelopeL_ > kThreshold)
+        {
+            bassGainL = kThreshold / (compEnvelopeL_ * bassRatio + kThreshold * (1.0f - bassRatio));
+        }
+
+        float bassGainR = 1.0f;
+        if(compEnvelopeR_ > kThreshold)
+        {
+            bassGainR = kThreshold / (compEnvelopeR_ * bassRatio + kThreshold * (1.0f - bassRatio));
+        }
+
+        bassL *= bassGainL;
+        bassR *= bassGainR;
+
+        // Asymmetric saturation on bass (warmth, even harmonics)
+        bassL = TapeSaturationCurve(bassL, satAmount * 0.8f);
+        bassR = TapeSaturationCurve(bassR, satAmount * 0.8f);
+
+        // --- MIDS/HIGHS PROCESSING (faster, tighter compression) ---
+        // Apply standard compression to highs
+        highL = SimpleCompressor(highL, hfRatio);
+        highR = SimpleCompressor(highR, hfRatio);
+
+        // Asymmetric saturation on highs (tape characteristic)
+        highL = TapeSaturationCurve(highL, satAmount);
+        highR = TapeSaturationCurve(highR, satAmount);
+
+        // Recombine bass and highs
+        xL = bassL + highL;
+        xR = bassR + highR;
+
+        // Final HF rolloff (tape head response)
         hfRollOff_[0].Process(xL);
         hfRollOff_[1].Process(xR);
         xL = hfRollOff_[0].Low();

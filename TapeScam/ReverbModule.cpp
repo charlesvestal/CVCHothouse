@@ -1,31 +1,19 @@
 #include "ReverbModule.h"
 #include <cmath>
 
-// Convert decay time (seconds) to feedback coefficient (0-1)
-static float DecayTimeToFeedback(float decaySeconds)
-{
-    if(decaySeconds < 0.1f)
-        return 0.0f;
-    if(decaySeconds > 10.0f)
-        decaySeconds = 10.0f;
-
-    // Map decay time to feedback
-    // 1.0s -> 0.7, 3.0s -> 0.85, 5.0s -> 0.9
-    float feedback = 0.6f + (decaySeconds / 10.0f) * 0.3f;
-    return feedback < 0.92f ? feedback : 0.92f;
-}
-
 int ReverbModule::Init(float sampleRate)
 {
     sampleRate_ = sampleRate;
     mix_ = 0.0f;
     targetMix_ = 0.0f;
+    wetGainComp_ = 0.3f;
 
     reverb_.Init(sampleRate_);
-    reverb_.SetFeedback(0.7f);
-    reverb_.SetDamping(0.4f);  // Some HF damping
+    reverb_.SetDecayTime(0.0f);  // Start with no reverb
+    reverb_.SetDamping(0.5f);
+    reverb_.SetModulation(0.0f, 0.0f);
 
-    return 0;  // Simple reverb always succeeds
+    return 0;
 }
 
 void ReverbModule::SetMix(float mix)
@@ -35,12 +23,26 @@ void ReverbModule::SetMix(float mix)
 
 void ReverbModule::SetDecayTime(float seconds)
 {
-    float feedback = DecayTimeToFeedback(seconds);
-    reverb_.SetFeedback(feedback);
+    reverb_.SetDecayTime(seconds);
 
-    // Adjust damping based on decay time (longer = less damping)
-    float damping = 0.6f - (seconds / 10.0f) * 0.3f;
+    // Adjust damping based on decay time (longer = less damping for brightness)
+    float damping = 0.52f - (seconds / 10.0f) * 0.06f;  // 0.52 to 0.46
     reverb_.SetDamping(damping);
+}
+
+void ReverbModule::SetFeedbackLowpassCutoff(float cutoffHz)
+{
+    reverb_.SetFeedbackLowpassCutoff(cutoffHz);
+}
+
+void ReverbModule::SetPostFilterCutoff(float cutoffHz)
+{
+    reverb_.SetPostFilterCutoff(cutoffHz);
+}
+
+void ReverbModule::SetModulation(float depthSec, float rateHz)
+{
+    reverb_.SetModulation(depthSec, rateHz);
 }
 
 void ReverbModule::UpdateControls()
@@ -79,13 +81,12 @@ void ReverbModule::Process(float** in, float** out, size_t size)
         float inL = in[0][i];
         float inR = in[1][i];
 
-        // Process through simple reverb
+        // Process through FDN reverb
         float reverbL, reverbR;
         reverb_.Process(inL, inR, &reverbL, &reverbR);
 
         // Mix dry and wet signals with gain compensation
-        const float wetGain = 0.25f;  // SimpleReverb outputs hot signal
-        out[0][i] = inL * dryMix + reverbL * wetMix * wetGain;
-        out[1][i] = inR * dryMix + reverbR * wetMix * wetGain;
+        out[0][i] = inL * dryMix + reverbL * wetMix * wetGainComp_;
+        out[1][i] = inR * dryMix + reverbR * wetMix * wetGainComp_;
     }
 }

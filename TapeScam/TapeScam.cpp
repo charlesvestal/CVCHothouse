@@ -281,33 +281,56 @@ void HandleReverbToggle()
         // Define parameters for each reverb mode
         float reverbMix;
         float reverbDecayTime;
+        float feedbackLPF;   // Anti-alias filter on feedback path
+        float postFilterLPF; // Anti-alias filter on output
+        float modDepth;      // Modulation depth
+        float modRate;       // Modulation rate
 
         switch(revMode)
         {
             case REV_OFF:
                 reverbMix       = 0.0f;
                 reverbDecayTime = 0.0f;
+                feedbackLPF     = 10000.0f;
+                postFilterLPF   = 12000.0f;
+                modDepth        = 0.0f;
+                modRate         = 0.0f;
                 break;
 
             case REV_LIGHT_ROOM:
-                reverbMix       = 0.25f;  // 25% wet
-                reverbDecayTime = 2.0f;   // 2 second tail
+                reverbMix       = 0.25f;   // 25% wet
+                reverbDecayTime = 1.8f;    // 1.8 second tail
+                feedbackLPF     = 10000.0f;  // 10kHz anti-alias on feedback
+                postFilterLPF   = 12000.0f;  // 12kHz anti-alias on output
+                modDepth        = 0.0008f;   // Very subtle modulation
+                modRate         = 0.30f;     // 0.3Hz modulation
                 break;
 
             case REV_PLATE_HALL:
-                reverbMix       = 0.40f;  // 40% wet
-                reverbDecayTime = 5.0f;   // 5 second tail
+                reverbMix       = 0.40f;   // 40% wet
+                reverbDecayTime = 4.5f;    // 4.5 second tail (reduced from 5s)
+                feedbackLPF     = 9000.0f;   // 9kHz anti-alias on feedback
+                postFilterLPF   = 12000.0f;  // 12kHz anti-alias on output
+                modDepth        = 0.0015f;   // Subtle modulation for character
+                modRate         = 0.35f;     // 0.35Hz modulation
                 break;
 
             default:
                 reverbMix       = 0.0f;
                 reverbDecayTime = 0.0f;
+                feedbackLPF     = 10000.0f;
+                postFilterLPF   = 12000.0f;
+                modDepth        = 0.0f;
+                modRate         = 0.0f;
                 break;
         }
 
         // Apply reverb parameters
         reverb.SetMix(reverbMix);
         reverb.SetDecayTime(reverbDecayTime);
+        reverb.SetFeedbackLowpassCutoff(feedbackLPF);
+        reverb.SetPostFilterCutoff(postFilterLPF);
+        reverb.SetModulation(modDepth, modRate);
     }
 }
 

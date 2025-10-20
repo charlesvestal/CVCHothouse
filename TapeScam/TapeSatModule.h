@@ -32,6 +32,10 @@ class TapeSatModule
     float dBToLin(float dB) const { return powf(10.0f, dB / 20.0f); }
     float SimpleCompressor(float inSample, float ratio) const;
 
+    // Enhanced tape saturation characteristics
+    float TapeSaturationCurve(float input, float satAmount) const;
+    float AsymmetricSaturation(float input, float asymmetry) const;
+
     float sampleRate_ = 48000.0f;
 
     // Target drive (0..1) from UI
@@ -51,9 +55,20 @@ class TapeSatModule
     float tapeCompressionRatio_ = 1.0f;
     float hfRollOffCutoff_ = 20000.0f;
     float biasGain_ = 1.0f;
+    float asymmetryAmount_ = 0.0f;  // Even-order harmonic generation
+    float bassCompressionRatio_ = 1.0f;  // Frequency-dependent compression
 
     // Biquad per channel for HF roll-off
     daisysp::Svf hfRollOff_[2];
+
+    // Split-band processing for frequency-dependent saturation
+    daisysp::Svf crossover_[2];  // Low/high split at ~400Hz
+
+    // Slow compression envelope followers (for tape-like compression)
+    float compEnvelopeL_ = 0.0f;
+    float compEnvelopeR_ = 0.0f;
+    float compAttackCoeff_ = 0.01f;   // ~10ms at 48kHz
+    float compReleaseCoeff_ = 0.001f; // ~100ms at 48kHz
 
     // Smoothing coefficient for drive parameter
     float driveSmoothCoeff_ = 0.005f;
