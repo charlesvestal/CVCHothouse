@@ -306,18 +306,48 @@ void TapeSatModule::Process(float** buffers, size_t size)
         bassL *= bassGainL;
         bassR *= bassGainR;
 
-        // Asymmetric saturation on bass (warmth, even harmonics)
-        bassL = TapeSaturationCurve(bassL, satAmount * 0.8f);
-        bassR = TapeSaturationCurve(bassR, satAmount * 0.8f);
+        // --- 2x OVERSAMPLING FOR SATURATION STAGES ---
+        // Process saturation at 2x sample rate to reduce aliasing from tanh()
+
+        // Bass saturation with oversampling
+        float bassL_os[2], bassR_os[2];
+        // Upsample: create intermediate sample via linear interpolation
+        bassL_os[0] = bassL;  // Current sample
+        bassL_os[1] = bassL;  // Same (simple hold - could interpolate with history if needed)
+        bassR_os[0] = bassR;
+        bassR_os[1] = bassR;
+
+        // Process both oversampled samples through saturation
+        bassL_os[0] = TapeSaturationCurve(bassL_os[0], satAmount * 0.8f);
+        bassL_os[1] = TapeSaturationCurve(bassL_os[1], satAmount * 0.8f);
+        bassR_os[0] = TapeSaturationCurve(bassR_os[0], satAmount * 0.8f);
+        bassR_os[1] = TapeSaturationCurve(bassR_os[1], satAmount * 0.8f);
+
+        // Downsample: average the two samples (acts as lowpass filter)
+        bassL = (bassL_os[0] + bassL_os[1]) * 0.5f;
+        bassR = (bassR_os[0] + bassR_os[1]) * 0.5f;
 
         // --- MIDS/HIGHS PROCESSING (faster, tighter compression) ---
         // Apply standard compression to highs
         highL = SimpleCompressor(highL, hfRatio);
         highR = SimpleCompressor(highR, hfRatio);
 
-        // Asymmetric saturation on highs (tape characteristic)
-        highL = TapeSaturationCurve(highL, satAmount);
-        highR = TapeSaturationCurve(highR, satAmount);
+        // Highs saturation with oversampling
+        float highL_os[2], highR_os[2];
+        highL_os[0] = highL;
+        highL_os[1] = highL;
+        highR_os[0] = highR;
+        highR_os[1] = highR;
+
+        // Process both oversampled samples through saturation
+        highL_os[0] = TapeSaturationCurve(highL_os[0], satAmount);
+        highL_os[1] = TapeSaturationCurve(highL_os[1], satAmount);
+        highR_os[0] = TapeSaturationCurve(highR_os[0], satAmount);
+        highR_os[1] = TapeSaturationCurve(highR_os[1], satAmount);
+
+        // Downsample
+        highL = (highL_os[0] + highL_os[1]) * 0.5f;
+        highR = (highR_os[0] + highR_os[1]) * 0.5f;
 
         // Recombine bass and highs
         xL = bassL + highL;

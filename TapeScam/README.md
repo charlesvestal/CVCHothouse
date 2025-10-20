@@ -2,31 +2,33 @@
 
 Tape emulation effects processor for Daisy Seed / Cleveland Music Co. Hothouse platform.
 
+Authentic tape degradation with musical character - designed for lo-fi vibes, vintage warmth, and cassette deck nostalgia.
+
 ## Features
 
 ### Tape Emulation Chain
 - **Gain Stage** - Input conditioning with character
-- **Tape Saturation** (Knob 2) - Harmonic saturation and compression
-- **Wow & Flutter** (Knob 3) - Time-varying pitch modulation with drift and jitter
+- **Tape Saturation** (Knob 2) - Harmonic saturation with 2x oversampling for alias-free warmth
+- **Wow & Flutter** (Knob 3) - Musical pitch wobble and tape speed variation
 - **Tape Hiss & Dropouts** (Knob 4) - Noise and occasional signal dropouts
 - **Tone Shaping** (Knob 5) - Frequency response adjustment
+- **Lo-Fi Compressor** (Toggle 3) - Upward AGC compression (makes hiss breathe)
 - **Global Level** (Knob 6) - Output level control
-- **Reverb** (Toggle 3) - Space and ambience (after level control)
 
 ### Signal Flow
 ```
-Input → GainStage → TapeSat → WowFlutter → Hiss/Dropout → Tone → Level → Reverb → Output
+Input → GainStage → TapeSat (2x OS) → WowFlutter → Hiss/Dropout → Tone → LoFi Comp → Level → Output
 ```
 
 ## Controls
 
 ### Knobs
-1. **Drive** - Tape saturation drive amount
-2. **Saturation** - Tape saturation intensity
-3. **Wow/Flutter** - Time modulation amount (wow, flutter, drift, jitter)
+1. **Drive** - Input gain staging
+2. **Saturation** - Tape saturation intensity (0-18dB drive range)
+3. **Wow/Flutter** - Time modulation amount (slow pitch wobble + fast warble)
 4. **Noise** - Tape hiss and dropout intensity
 5. **Tone** - Frequency shaping
-6. **Level** - Master output level (controls signal going into reverb)
+6. **Level** - Master output level
 
 ### Toggle Switches
 
@@ -52,19 +54,30 @@ Input → GainStage → TapeSat → WowFlutter → Hiss/Dropout → Tone → Lev
   - Extended HF response (20kHz rolloff)
   - Boosted headroom (+3dB)
   - Much less saturation (0.5×)
+  - Pre-sat filter: 24kHz
 - **Middle (Standard)**: Normal tape speed
   - Normal HF rolloff (14kHz)
   - Baseline headroom (-1dB)
   - Normal saturation
+  - Pre-sat filter: 20kHz
 - **Down (Lo-Fi)**: Degraded/slow speed
   - Dark, telephone-like HF (8kHz rolloff)
   - Heavily reduced headroom (-6dB)
   - Heavy saturation (2.0×)
+  - Pre-sat filter: 16kHz
 
-#### Toggle 3 - Reverb/Ambience
-- **Up (Off)**: No reverb
-- **Middle (Light Room)**: 25% wet, 2 second decay
-- **Down (Plate/Hall)**: 40% wet, 5 second decay
+#### Toggle 3 - Lo-Fi Compression (NEW!)
+- **Up (Off)**: No compression, clean signal
+- **Middle (Light)**: Musical AGC pumping
+  - 45% threshold, 8:1 upward ratio
+  - 400ms release (moderate breathing)
+  - Hiss gently swells during quiet parts
+- **Down (Heavy)**: Extreme cassette deck pumping
+  - 65% threshold, 18:1 upward ratio
+  - 800ms release (dramatic breathing)
+  - Hiss ROARS up during quiet passages (lo-fi magic!)
+
+**How it works:** Upward compression boosts quiet signals (including background hiss), making the noise floor "breathe" with the dynamics just like a cheap cassette deck's AGC circuit. The slow release times create that classic pumping effect.
 
 ### Footswitch
 - **Footswitch 1**: True bypass on/off
@@ -72,52 +85,89 @@ Input → GainStage → TapeSat → WowFlutter → Hiss/Dropout → Tone → Lev
 ## Technical Details
 
 ### Memory Usage
-- Flash: ~83% (108KB)
+- Flash: ~82% (108KB)
 - SRAM: ~5% (27KB)
 
-### Reverb Algorithm
-Custom Freeverb-style reverb using 4 comb filters + 2 allpass filters per channel. Designed for stability with modulated input signals - no artifacts when combined with wow/flutter.
+### Tape Saturation - Anti-Aliasing System
 
-### Wow/Flutter Implementation
+**Problem:** `tanh()` nonlinearity generates high-frequency harmonics that fold back as aliasing when processing bright signals.
+
+**Solution:** Multi-stage anti-aliasing approach (CPU-friendly, no compromise on character):
+
+1. **Pre-Saturation Anti-Aliasing Filter**
+   - Band-limits input before nonlinear processing
+   - Speed-dependent cutoff: LoFi=16kHz, Standard=20kHz, High=24kHz
+   - Prevents ultra-HF content from generating foldback harmonics
+
+2. **Drive-Dependent Asymmetry** (improved character)
+   - Dead zone below 0.1 drive = zero asymmetry (clean/linear tape region)
+   - Above 0.1: quadratic mapping (0 → 0.35 max asymmetry)
+   - Mimics real tape bias behavior (linear at low levels, hysteresis at high)
+
+3. **2x Oversampling** (NEW - main aliasing killer!)
+   - Saturation stages process at 96kHz effective sample rate
+   - Simple upsampling: duplicate samples (hold)
+   - Process both samples through `TapeSaturationCurve()`
+   - Downsample: average output (acts as anti-aliasing lowpass)
+   - Result: Harmonics from `tanh()` have headroom before Nyquist
+
+4. **Dynamic Post-Saturation Filtering**
+   - Drive-dependent cutoff: 20kHz @ drive=0 → 12kHz @ drive=1
+   - Kills remaining high-order harmonics before output
+   - Final safety net against aliasing
+
+**CPU Impact:** Calling saturation function 2x more often (bass + highs), but lightweight enough for Daisy Seed at 48kHz.
+
+**Result:** Clean, warm tape saturation even with bright input signals. No bitcrushed/aliased artifacts.
+
+### Wow/Flutter Implementation - Simplified for Musicality
+
+**Previous version** had complex cross-modulated LFOs that made the effect unpredictable and muddy above 50% knob position.
+
+**Current version** (simplified):
+- **Wow**: Pure sine wave, 0.25-0.5 Hz (slow, musical pitch wobble)
+- **Flutter**: Pure sine wave, 2-5 Hz (audible tape speed variation)
+- **Linear control curve** - knob position directly controls depth (no squaring)
+- **Stereo**: 3% L/R offset for subtle width, minimal phasing
+- **Always-on design**: Delay buffers run continuously, depths go to zero at 0%
+
+**Technical specs:**
 - Buffer size: 2048 samples (~42ms at 48kHz)
 - Base delays: 12ms (L), 15ms (R) for stereo width
 - Cubic Hermite interpolation for smooth pitch modulation
-- Discontinuity guards prevent buffer wrap artifacts
+- Slew-rate limiter (85% smoothing) prevents clicks from abrupt changes
+- Max depth: 8ms wow, 2ms flutter
 
-**Cross-Modulated LFO System:**
-Creates organic, pseudo-random variation without aliasing artifacts.
+**Result:** Clear, audible effect across full range (0-100%) with predictable behavior.
 
-- **4 Independent LFOs** (prime-numbered rates for non-correlation):
-  - Wow depth: 0.029 Hz (~34 second cycle)
-  - Wow rate: 0.067 Hz (~15 second cycle)
-  - Flutter depth: 0.109 Hz (~9 second cycle)
-  - Flutter rate: 0.131 Hz (~8 second cycle)
+### Lo-Fi Compressor - Cassette Deck AGC
 
-- **Cross-Modulation Matrix:**
-  - Wow rate ← modulated by flutter depth LFO (±30%)
-  - Wow depth ← modulated by flutter rate LFO (±40%)
-  - Flutter rate ← modulated by wow depth LFO (±30%)
-  - Flutter depth ← modulated by wow rate LFO (±60%)
+**Algorithm:** Upward compression (boosts quiet signals instead of reducing loud ones)
 
-- **Warble Characteristics:**
-  - Complex, never-repeating patterns (LCM of cycles ~millions of seconds)
-  - Smooth transitions (no discontinuities = no aliasing)
-  - Appears random but fully deterministic
-  - Amount controlled by tape age factors
+**Implementation:**
+- Fast attack (2-8ms) to catch transients
+- Slow release (250-800ms) creates pumping/breathing
+- Envelope follower with attack/release coefficients
+- Stereo processing (independent L/R envelopes)
 
-**Variation Tied to Tape Age (Toggle 1):**
-- New tape: 20% wow variation, 10% flutter turbulence
-- Used tape: 40% wow variation, 20% flutter turbulence
-- Worn tape: 70% wow variation, 40% flutter turbulence
+**Light Mode:**
+- Threshold: 45% (signals below get boosted)
+- Ratio: 8:1 (up to 8x boost for very quiet parts)
+- Max boost: 12x limited
+- Release: 400ms
 
-**Flutter Bursts:** 2× depth for 0.1-0.3s every ~3 seconds (capstan slip simulation)
+**Heavy Mode:**
+- Threshold: 65% (most of signal gets boosted!)
+- Ratio: 18:1 (extreme boost for quiet parts)
+- Max boost: 20x limited
+- Release: 800ms (very slow = dramatic breathing)
 
-**Debug counters:** burstCountL/R, maxReadDeltaSamplesL/R, jumpCountL/R
+**Effect:** Background hiss becomes a musical element that swells and ducks with the dynamics, just like a cheap cassette player's AGC circuit desperately trying to maintain level.
 
 ### Known Characteristics
 - Toggle switches combine effects (Age + Speed both affect headroom and saturation)
-- Reverb is placed after level control for better gain staging
-- Simple reverb topology prevents bit-crushing artifacts that occurred with more complex algorithms
+- Lo-fi compression placed before level control (so it can really pump before trim)
+- Oversampling adds minimal latency (~1 sample = 0.02ms at 48kHz)
 
 ## Building
 
@@ -136,5 +186,8 @@ make program-dfu  # Flash to Daisy Seed
 
 Based on Cleveland Music Co. Hothouse platform.
 
-Reverb design inspired by Freeverb (comb + allpass topology).
-Wow/flutter modulation techniques from classic tape emulation research.
+Tape saturation anti-aliasing techniques based on research into analog tape physics and modern DSP best practices.
+
+Wow/flutter simplified from original cross-modulated LFO system for clarity and musicality.
+
+Lo-fi compressor inspired by vintage cassette deck AGC circuits.

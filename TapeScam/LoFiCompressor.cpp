@@ -37,13 +37,13 @@ void LoFiCompressor::UpdateParameters()
         case 1:  // Light - musical AGC pumping
             threshold_ = 0.45f;  // Below 45%, start boosting
             ratio_ = 8.0f;       // 8:1 upward (nice musical boost)
-            makeupGain_ = 1.1f;  // Subtle extra gain
+            makeupGain_ = 0.7f;  // Compensate for upward gain
             break;
 
         case 2:  // Heavy - extreme cassette deck pumping
             threshold_ = 0.65f;  // Below 65%, start boosting
             ratio_ = 18.0f;      // 18:1 upward (strong pumping)
-            makeupGain_ = 1.3f;  // Moderate boost
+            makeupGain_ = 0.5f;  // Compensate for heavy upward gain
             break;
     }
 }
