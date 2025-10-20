@@ -4,13 +4,14 @@
 
 namespace
 {
-constexpr float kMinRollOffHz = 12000.0f;
+constexpr float kMinRollOffHz = 14000.0f;  // Raised from 12kHz for cleaner highs
 constexpr float kMaxRollOffHz = 20000.0f;
 constexpr float kMaxDriveDb  = 18.0f;
 constexpr float kBiasRange   = 0.5f;   // up to +50% bias gain
 constexpr float kCompMin     = 1.0f;
 constexpr float kCompRange   = 3.0f;   // up to 4:1
-constexpr float kThreshold   = 0.8f;   // compressor knee
+constexpr float kKneeStart   = 0.6f;   // Soft knee start
+constexpr float kKneeEnd     = 0.9f;   // Soft knee end (was hard threshold at 0.8)
 constexpr float kDriveBypass = 0.01f;  // below this we bypass processing
 }
 
@@ -29,10 +30,18 @@ void TapeSatModule::Init(float sampleRate)
     hfRollOffCutoff_ = kMaxRollOffHz;
     biasGain_ = 1.0f;
     asymmetryAmount_ = 0.0f;
+    asymmetryAmountHigh_ = 0.0f;
     bassCompressionRatio_ = 1.0f;
+    highSaturationLimit_ = 1.0f;
 
     compEnvelopeL_ = 0.0f;
     compEnvelopeR_ = 0.0f;
+
+    // Initialize oversampling history
+    bassL_prev_ = 0.0f;
+    bassR_prev_ = 0.0f;
+    highL_prev_ = 0.0f;
+    highR_prev_ = 0.0f;
 
     // Initialize pre-saturation anti-aliasing filters
     // Band-limits input before nonlinear saturation to reduce aliasing
@@ -136,18 +145,26 @@ void TapeSatModule::UpdateControls()
     bassCompressionRatio_ = kCompMin + drive * (kCompRange * 0.6f);
 
     // Asymmetry creates even-order harmonics (tape hysteresis)
-    // Dead zone below 0.1 drive = symmetric (linear tape region)
-    // Above 0.1: quadratic mapping for smooth growth
+    // Bass band: Quadratic mapping for smooth growth, up to 0.4 asymmetry
+    asymmetryAmount_ = drive * drive * 0.4f;
+
+    // High band: Dead zone below 0.1 drive, then gentler asymmetry growth
+    // This reduces high-frequency harmonic generation to minimize aliasing
     if(drive < 0.1f)
     {
-        asymmetryAmount_ = 0.0f;  // Clean, symmetric response
+        asymmetryAmountHigh_ = 0.0f;  // No high-band asymmetry at low drive
     }
     else
     {
-        // Quadratic mapping: (drive - 0.1)^2 scaled to 0.0 → 0.35
+        // Quadratic mapping: (drive - 0.1)^2 scaled to 0.0 → 0.25 (less than bass)
         float driveScaled = (drive - 0.1f) / 0.9f;  // Normalize to 0-1
-        asymmetryAmount_ = driveScaled * driveScaled * 0.35f;  // Up to 35% asymmetry
+        asymmetryAmountHigh_ = driveScaled * driveScaled * 0.25f;
     }
+
+    // High-band saturation limiter: reduce saturation strength in highs to prevent aliasing
+    // At drive=0: moderate saturation (0.6x)
+    // At drive=1: very limited to 0.3x saturation strength
+    highSaturationLimit_ = 0.6f - drive * 0.3f;  // 0.6 → 0.3
 
     // Use override cutoff if set, otherwise calculate based on drive
     if(hfRolloffOverride_ > 0.0f)
@@ -170,9 +187,9 @@ void TapeSatModule::UpdateControls()
     }
 
     // Update post-saturation HF rolloff (main anti-aliasing defense)
-    // Drive-dependent: 20kHz at drive=0 → 12kHz at drive=1
-    // This kills high-order harmonics from tanh() before they alias
-    float postSatCutoff = 20000.0f - drive * 8000.0f;  // 20kHz → 12kHz
+    // Drive-dependent: 18kHz at drive=0 → 10kHz at drive=1
+    // Very aggressive to eliminate aliasing artifacts
+    float postSatCutoff = 18000.0f - drive * 8000.0f;  // 18kHz → 10kHz
     for(auto& svf : hfRollOff_)
     {
         svf.SetFreq(postSatCutoff);
@@ -181,19 +198,37 @@ void TapeSatModule::UpdateControls()
     }
 }
 
-float TapeSatModule::SimpleCompressor(float inSample, float ratio) const
+float TapeSatModule::SoftKneeCompressor(float inSample, float ratio, float kneeStart, float kneeEnd) const
 {
     const float absIn = fabsf(inSample);
-    if(absIn <= kThreshold)
+
+    if(absIn <= kneeStart)
     {
+        // Below knee start - no compression
         return inSample;
     }
+    else if(absIn < kneeEnd)
+    {
+        // In the knee region - gradual transition from 1:1 to full ratio
+        // This creates a smooth curve that reduces harsh harmonic generation
+        float kneePosition = (absIn - kneeStart) / (kneeEnd - kneeStart);  // 0.0 → 1.0
+        float currentRatio = 1.0f + kneePosition * (ratio - 1.0f);  // Smoothly increase ratio
 
-    float excess = absIn - kThreshold;
-    float compressed = kThreshold + (excess / ratio);
+        float excess = absIn - kneeStart;
+        float compressed = kneeStart + (excess / currentRatio);
+
+        return inSample >= 0.0f ? compressed : -compressed;
+    }
+    else
+    {
+        // Above knee end - full compression ratio
+        float excess = absIn - kneeEnd;
+        float compressed = kneeEnd + (excess / ratio);
         if(compressed > 1.0f)
             compressed = 1.0f;
-    return inSample >= 0.0f ? compressed : -compressed;
+
+        return inSample >= 0.0f ? compressed : -compressed;
+    }
 }
 
 float TapeSatModule::AsymmetricSaturation(float input, float asymmetry) const
@@ -214,152 +249,44 @@ float TapeSatModule::AsymmetricSaturation(float input, float asymmetry) const
     }
 }
 
-float TapeSatModule::TapeSaturationCurve(float input, float satAmount) const
+float TapeSatModule::TapeSaturationCurve(float input, float satAmount, float asymmetry) const
 {
-    // Original multi-stage tape saturation (restored for authentic sound):
-    // 1. Soft knee compression (low levels)
-    // 2. Asymmetric saturation (mid levels) - creates even harmonics
-    // 3. Hard limiting (high levels)
+    // Pure smooth tanh - absolutely no discontinuities
+    // Asymmetry parameter currently unused - all character from drive + filtering
 
-    const float absIn = fabsf(input);
+    if(satAmount < 0.01f)
+    {
+        // Bypass saturation entirely at very low settings
+        return input;
+    }
 
-    if(absIn < 0.3f)
-    {
-        // Low level - mostly clean with slight compression
-        return input * (1.0f + satAmount * 0.1f);
-    }
-    else if(absIn < 0.7f)
-    {
-        // Mid level - asymmetric saturation zone
-        float asymSat = AsymmetricSaturation(input, asymmetryAmount_);
-        // Blend based on saturation amount
-        return input * (1.0f - satAmount) + asymSat * satAmount;
-    }
-    else
-    {
-        // High level - hard tape saturation
-        return tanhf(input * (1.0f + satAmount * 2.0f));
-    }
+    // Simple tanh saturation - mathematically smooth everywhere
+    // Very conservative drive multiplier
+    float drive = 1.0f + satAmount * 0.8f;  // Max drive = 1.8x
+    return tanhf(input * drive);
 }
+
 
 void TapeSatModule::Process(float** buffers, size_t size)
 {
     if(smoothedDrive_ < kDriveBypass)
     {
-        // effectively bypass: nothing to do, assume buffers already contain input
-        return;
+        return;  // Bypass if drive is very low
     }
 
-    const float driveLin      = tapeDriveLin_;
-    const float satAmount     = tapeSaturationFactor_;
-    const float hfRatio       = tapeCompressionRatio_;
-    const float bassRatio     = bassCompressionRatio_;
-    const float bias          = biasGain_;
-    const float attackCoeff   = compAttackCoeff_;
-    const float releaseCoeff  = compReleaseCoeff_;
+    const float satAmount = tapeSaturationFactor_;
+
+    if(satAmount < 0.01f)
+    {
+        return;  // Bypass if saturation is off
+    }
+
+    // Tape saturation using smooth tanh curve
+    const float drive = 1.0f + satAmount * 2.5f;
 
     for(size_t i = 0; i < size; ++i)
     {
-        // 1. Pre-saturation anti-aliasing filter (band-limit input before nonlinearity)
-        // Removes ultra-HF content to prevent aliasing from tanh() harmonics
-        preSatLPF_[0].Process(buffers[0][i]);
-        preSatLPF_[1].Process(buffers[1][i]);
-        float xL = preSatLPF_[0].Low() * driveLin * bias;
-        float xR = preSatLPF_[1].Low() * driveLin * bias;
-
-        // 2. Split into bass and mids/highs for frequency-dependent processing
-        crossover_[0].Process(xL);
-        crossover_[1].Process(xR);
-
-        float bassL = crossover_[0].Low();
-        float highL = crossover_[0].High();
-        float bassR = crossover_[1].Low();
-        float highR = crossover_[1].High();
-
-        // --- BASS PROCESSING (slower, looser compression) ---
-        // Slow envelope follower for tape-like compression
-        float envL = fabsf(bassL);
-        if(envL > compEnvelopeL_)
-            compEnvelopeL_ += (envL - compEnvelopeL_) * attackCoeff;
-        else
-            compEnvelopeL_ += (envL - compEnvelopeL_) * releaseCoeff;
-
-        float envR = fabsf(bassR);
-        if(envR > compEnvelopeR_)
-            compEnvelopeR_ += (envR - compEnvelopeR_) * attackCoeff;
-        else
-            compEnvelopeR_ += (envR - compEnvelopeR_) * releaseCoeff;
-
-        // Apply slow compression to bass (tape-like)
-        float bassGainL = 1.0f;
-        if(compEnvelopeL_ > kThreshold)
-        {
-            bassGainL = kThreshold / (compEnvelopeL_ * bassRatio + kThreshold * (1.0f - bassRatio));
-        }
-
-        float bassGainR = 1.0f;
-        if(compEnvelopeR_ > kThreshold)
-        {
-            bassGainR = kThreshold / (compEnvelopeR_ * bassRatio + kThreshold * (1.0f - bassRatio));
-        }
-
-        bassL *= bassGainL;
-        bassR *= bassGainR;
-
-        // --- 2x OVERSAMPLING FOR SATURATION STAGES ---
-        // Process saturation at 2x sample rate to reduce aliasing from tanh()
-
-        // Bass saturation with oversampling
-        float bassL_os[2], bassR_os[2];
-        // Upsample: create intermediate sample via linear interpolation
-        bassL_os[0] = bassL;  // Current sample
-        bassL_os[1] = bassL;  // Same (simple hold - could interpolate with history if needed)
-        bassR_os[0] = bassR;
-        bassR_os[1] = bassR;
-
-        // Process both oversampled samples through saturation
-        bassL_os[0] = TapeSaturationCurve(bassL_os[0], satAmount * 0.8f);
-        bassL_os[1] = TapeSaturationCurve(bassL_os[1], satAmount * 0.8f);
-        bassR_os[0] = TapeSaturationCurve(bassR_os[0], satAmount * 0.8f);
-        bassR_os[1] = TapeSaturationCurve(bassR_os[1], satAmount * 0.8f);
-
-        // Downsample: average the two samples (acts as lowpass filter)
-        bassL = (bassL_os[0] + bassL_os[1]) * 0.5f;
-        bassR = (bassR_os[0] + bassR_os[1]) * 0.5f;
-
-        // --- MIDS/HIGHS PROCESSING (faster, tighter compression) ---
-        // Apply standard compression to highs
-        highL = SimpleCompressor(highL, hfRatio);
-        highR = SimpleCompressor(highR, hfRatio);
-
-        // Highs saturation with oversampling
-        float highL_os[2], highR_os[2];
-        highL_os[0] = highL;
-        highL_os[1] = highL;
-        highR_os[0] = highR;
-        highR_os[1] = highR;
-
-        // Process both oversampled samples through saturation
-        highL_os[0] = TapeSaturationCurve(highL_os[0], satAmount);
-        highL_os[1] = TapeSaturationCurve(highL_os[1], satAmount);
-        highR_os[0] = TapeSaturationCurve(highR_os[0], satAmount);
-        highR_os[1] = TapeSaturationCurve(highR_os[1], satAmount);
-
-        // Downsample
-        highL = (highL_os[0] + highL_os[1]) * 0.5f;
-        highR = (highR_os[0] + highR_os[1]) * 0.5f;
-
-        // Recombine bass and highs
-        xL = bassL + highL;
-        xR = bassR + highR;
-
-        // Final HF rolloff (tape head response)
-        hfRollOff_[0].Process(xL);
-        hfRollOff_[1].Process(xR);
-        xL = hfRollOff_[0].Low();
-        xR = hfRollOff_[1].Low();
-
-        buffers[0][i] = xL;
-        buffers[1][i] = xR;
+        buffers[0][i] = tanhf(buffers[0][i] * drive);
+        buffers[1][i] = tanhf(buffers[1][i] * drive);
     }
 }

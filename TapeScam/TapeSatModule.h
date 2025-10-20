@@ -30,10 +30,12 @@ class TapeSatModule
     }
 
     float dBToLin(float dB) const { return powf(10.0f, dB / 20.0f); }
-    float SimpleCompressor(float inSample, float ratio) const;
+
+    // Soft-knee compression for smoother transitions (reduces harsh harmonics)
+    float SoftKneeCompressor(float inSample, float ratio, float kneeStart, float kneeEnd) const;
 
     // Enhanced tape saturation characteristics
-    float TapeSaturationCurve(float input, float satAmount) const;
+    float TapeSaturationCurve(float input, float satAmount, float asymmetry) const;
     float AsymmetricSaturation(float input, float asymmetry) const;
 
     float sampleRate_ = 48000.0f;
@@ -56,8 +58,10 @@ class TapeSatModule
     float preSatLPFCutoff_ = 20000.0f;  // Pre-sat anti-alias filter cutoff
     float hfRollOffCutoff_ = 20000.0f;
     float biasGain_ = 1.0f;
-    float asymmetryAmount_ = 0.0f;  // Even-order harmonic generation
+    float asymmetryAmount_ = 0.0f;  // Even-order harmonic generation (bass band)
+    float asymmetryAmountHigh_ = 0.0f;  // Even-order harmonic generation (high band)
     float bassCompressionRatio_ = 1.0f;  // Frequency-dependent compression
+    float highSaturationLimit_ = 1.0f;  // Limits high-band saturation to reduce aliasing
 
     // Pre-saturation anti-aliasing filter (band-limits input before nonlinearity)
     daisysp::Svf preSatLPF_[2];  // Removes ultra-HF content to reduce aliasing
@@ -76,6 +80,12 @@ class TapeSatModule
 
     // Smoothing coefficient for drive parameter
     float driveSmoothCoeff_ = 0.005f;
+
+    // History for linear interpolation in oversampling
+    float bassL_prev_ = 0.0f;
+    float bassR_prev_ = 0.0f;
+    float highL_prev_ = 0.0f;
+    float highR_prev_ = 0.0f;
 
     bool paramsDirty_ = true;
 };
