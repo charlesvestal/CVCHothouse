@@ -99,13 +99,13 @@ void WowFlutterModule::UpdateControls()
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
 
     const float amt = smoothedAmount_;
-    const float shaped = Clamp(amt * amt, 0.0f, 1.0f);
 
+    // Linear control for clarity - no squaring
     // Apply depth multiplier to wow and flutter amounts
-    wowAmount_     = shaped * depthMultiplier_;
-    wowRateHz_     = 0.015f + shaped * 0.085f;    // 0.015 – 0.100 Hz (slightly slower lower bound)
-    flutterAmount_ = 0.35f * Clamp(amt, 0.0f, 1.0f) * depthMultiplier_;
-    flutterRateHz_ = 4.5f + flutterAmount_ * 8.0f; // 4.5 – ~7.3 Hz
+    wowAmount_     = amt * depthMultiplier_;
+    wowRateHz_     = 0.25f + amt * 0.25f;         // 0.25 – 0.5 Hz (slow, musical wow)
+    flutterAmount_ = amt * depthMultiplier_;
+    flutterRateHz_ = 2.0f + amt * 3.0f;           // 2.0 – 5.0 Hz (audible flutter)
 }
 
 float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float index)
@@ -156,20 +156,6 @@ float WowFlutterModule::InterpolateCubic(const float* buf, size_t size, float in
 
 void WowFlutterModule::Process(float** in, float** out, size_t size)
 {
-    const float amount = smoothedAmount_;
-    if(amount < 0.0005f)
-    {
-        if(in != out)
-        {
-            for(size_t i = 0; i < size; ++i)
-            {
-                out[0][i] = in[0][i];
-                out[1][i] = in[1][i];
-            }
-        }
-        return;
-    }
-
     const float wowAmt        = wowAmount_;
     const float flutterAmt    = flutterAmount_;
 
@@ -177,66 +163,20 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     const float baseSecL      = baseDelaySamplesL_ * invSr;
     const float baseSecR      = baseDelaySamplesR_ * invSr;
 
-    const float maxWowDepthSec = 0.020f;  // 20ms max
+    // Simplified depth control - musical and clear
+    const float maxWowDepthSec = 0.008f;      // 8ms max wow (pitch wobble)
+    const float maxFlutterDepthSec = 0.002f;  // 2ms max flutter (tape speed variation)
 
-    // Update burst timers (runs once per buffer)
-    const float burstIntervalSec = 3.0f;  // Average time between bursts
-    burstTimerL_ += static_cast<float>(size) * invSr;
-    burstTimerR_ += static_cast<float>(size) * invSr;
+    // Simple, direct modulation - no cross-modulation complexity
+    wowDepthL_actual_ = maxWowDepthSec * wowAmt;
+    wowDepthR_actual_ = maxWowDepthSec * wowAmt;
+    wowRateL_actual_ = wowRateHz_;
+    wowRateR_actual_ = wowRateHz_ * 1.03f;  // Slight L/R offset for width
 
-    // Cross-modulated LFO system for organic, pseudo-random variation
-    // LFO-on-LFO creates complex patterns that never repeat exactly
-
-    // Base LFO rates (prime-ish numbers to avoid correlation)
-    const float wowDepthLFORate = 0.029f;   // ~34 second cycle
-    const float wowRateLFORate = 0.067f;    // ~15 second cycle
-    const float flutterDepthLFORate = 0.109f;  // ~9 second cycle
-    const float flutterRateLFORate = 0.131f;   // ~8 second cycle
-
-    // Update primary LFO phases
-    wowDepthLFOPhase_ += wowDepthLFORate * invSr * static_cast<float>(size);
-    wowRateLFOPhase_ += wowRateLFORate * invSr * static_cast<float>(size);
-    flutterDepthLFOPhase_ += flutterDepthLFORate * invSr * static_cast<float>(size);
-    flutterRateLFOPhase_ += flutterRateLFORate * invSr * static_cast<float>(size);
-
-    if(wowDepthLFOPhase_ >= 1.0f) wowDepthLFOPhase_ -= 1.0f;
-    if(wowRateLFOPhase_ >= 1.0f) wowRateLFOPhase_ -= 1.0f;
-    if(flutterDepthLFOPhase_ >= 1.0f) flutterDepthLFOPhase_ -= 1.0f;
-    if(flutterRateLFOPhase_ >= 1.0f) flutterRateLFOPhase_ -= 1.0f;
-
-    // Generate primary LFO values (sine waves, -1 to +1)
-    float wowDepthLFO = std::sin(kTwoPi * wowDepthLFOPhase_);
-    float wowRateLFO = std::sin(kTwoPi * wowRateLFOPhase_);
-    float flutterDepthLFO = std::sin(kTwoPi * flutterDepthLFOPhase_);
-    float flutterRateLFO = std::sin(kTwoPi * flutterRateLFOPhase_);
-
-    // Cross-modulation: use one LFO to modulate another's rate/amount
-    // This creates complex, organic patterns
-    // Wow rate is modulated by flutter depth LFO
-    const float wowRateCrossMod = 1.0f + 0.3f * wowRandomnessFactor_ * flutterDepthLFO;
-    const float wowRateMod = wowRateCrossMod * (1.0f + wowRandomnessFactor_ * 0.2f * wowRateLFO);
-
-    // Wow depth is modulated by flutter rate LFO
-    const float wowDepthCrossMod = 1.0f + 0.4f * wowRandomnessFactor_ * flutterRateLFO;
-    const float wowDepthMod = wowDepthCrossMod * (1.0f + wowRandomnessFactor_ * 0.3f * wowDepthLFO);
-
-    wowRateL_actual_ = wowRateHz_ * 1.0f * wowRateMod;
-    wowDepthL_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
-    wowRateR_actual_ = wowRateHz_ * 1.035f * wowRateMod;  // Same cross-mod for L/R coherence
-    wowDepthR_actual_ = maxWowDepthSec * wowAmt * wowDepthMod;
-
-    // Flutter rate is modulated by wow depth LFO
-    const float flutterRateCrossMod = 1.0f + 0.3f * flutterTurbulenceFactor_ * wowDepthLFO;
-    const float flutterRateMod = flutterRateCrossMod * (1.0f + flutterTurbulenceFactor_ * 0.2f * flutterRateLFO);
-
-    // Flutter depth is modulated by wow rate LFO
-    const float flutterDepthCrossMod = 1.0f + 0.6f * flutterTurbulenceFactor_ * wowRateLFO;
-    const float flutterDepthMod = flutterDepthCrossMod * (1.0f + flutterTurbulenceFactor_ * 0.5f * flutterDepthLFO);
-
-    flutterRateL_actual_ = flutterRateHz_ * 1.0f * flutterRateMod;
-    flutterDepthL_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f)) * flutterDepthMod;
-    flutterRateR_actual_ = flutterRateHz_ * 0.96f * flutterRateMod;
-    flutterDepthR_actual_ = 0.0010f * std::sqrt(std::max(flutterAmt, 0.0f)) * flutterDepthMod;
+    flutterDepthL_actual_ = maxFlutterDepthSec * flutterAmt;
+    flutterDepthR_actual_ = maxFlutterDepthSec * flutterAmt;
+    flutterRateL_actual_ = flutterRateHz_;
+    flutterRateR_actual_ = flutterRateHz_ * 0.97f;  // Slight L/R offset
 
     for(size_t i = 0; i < size; ++i)
     {
@@ -245,84 +185,41 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
 
         // --- LEFT CHANNEL ---
 
-        // Update wow phase (using pre-calculated rate)
+        // Update wow phase
         wowPhaseL_ += wowRateL_actual_ * invSr;
         if(wowPhaseL_ >= 1.0f) wowPhaseL_ -= 1.0f;
 
-        // Wow waveform: pure sine (triangle has sharp corners = harmonics = aliasing)
+        // Wow waveform: pure sine
         float wowL = std::sin(kTwoPi * wowPhaseL_);
 
-        // Update flutter phase (using pre-calculated rate)
+        // Update flutter phase
         fltPhaseL_ += flutterRateL_actual_ * invSr;
         if(fltPhaseL_ >= 1.0f) fltPhaseL_ -= 1.0f;
 
-        // Flutter waveform (jitter disabled - testing for aliasing)
-        // flutterJitL_ = (1.0f - kJitterAlpha) * flutterJitL_ + kJitterAlpha * NextRandCentered();
+        // Flutter waveform: pure sine
         float flutterL = std::sin(kTwoPi * fltPhaseL_);
 
-        // Flutter burst logic
-        if(burstCountdownL_ > 0.0f) {
-            burstCountdownL_ -= invSr;
-            if(burstCountdownL_ <= 0.0f) {
-                burstAmountL_ = 1.0f;  // End burst
-            }
-        } else if(burstTimerL_ > burstIntervalSec) {
-            // Trigger new burst with some randomness
-            if(NextRand() < (invSr * static_cast<float>(size) / burstIntervalSec)) {
-                burstCountdownL_ = NextRandRange(0.1f, 0.3f);
-                burstAmountL_ = 2.0f;  // Double flutter during burst
-                burstCountL_++;
-                burstTimerL_ = 0.0f;
-            }
-        }
-
-        // Drift (disabled - testing for aliasing)
-        // float driftTargetL = kDriftScale * NextRandCentered();
-        // driftL_ += kDriftCoeff * (driftTargetL - driftL_);
-
-        // Combine modulations (using pre-calculated depths, no jitter/drift)
-        float devSecL = wowDepthL_actual_ * wowL
-                      + flutterDepthL_actual_ * burstAmountL_ * flutterL;
+        // Combine modulations (simple addition - wow + flutter)
+        float devSecL = wowDepthL_actual_ * wowL + flutterDepthL_actual_ * flutterL;
 
         // --- RIGHT CHANNEL ---
 
-        // Update wow phase (using pre-calculated rate)
+        // Update wow phase
         wowPhaseR_ += wowRateR_actual_ * invSr;
         if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
 
-        // Wow waveform: pure sine (triangle has sharp corners = harmonics = aliasing)
+        // Wow waveform: pure sine
         float wowR = std::sin(kTwoPi * wowPhaseR_);
 
-        // Update flutter phase (using pre-calculated rate)
+        // Update flutter phase
         fltPhaseR_ += flutterRateR_actual_ * invSr;
         if(fltPhaseR_ >= 1.0f) fltPhaseR_ -= 1.0f;
 
-        // Flutter waveform (jitter disabled - testing for aliasing)
-        // flutterJitR_ = (1.0f - kJitterAlpha) * flutterJitR_ + kJitterAlpha * NextRandCentered();
+        // Flutter waveform: pure sine
         float flutterR = std::sin(kTwoPi * fltPhaseR_);
 
-        // Flutter burst logic
-        if(burstCountdownR_ > 0.0f) {
-            burstCountdownR_ -= invSr;
-            if(burstCountdownR_ <= 0.0f) {
-                burstAmountR_ = 1.0f;
-            }
-        } else if(burstTimerR_ > burstIntervalSec) {
-            if(NextRand() < (invSr * static_cast<float>(size) / burstIntervalSec)) {
-                burstCountdownR_ = NextRandRange(0.1f, 0.3f);
-                burstAmountR_ = 2.0f;
-                burstCountR_++;
-                burstTimerR_ = 0.0f;
-            }
-        }
-
-        // Drift (disabled - testing for aliasing)
-        // float driftTargetR = kDriftScale * NextRandCentered();
-        // driftR_ += kDriftCoeff * (driftTargetR - driftR_);
-
-        // Combine modulations (using pre-calculated depths, no jitter/drift)
-        float devSecR = wowDepthR_actual_ * wowR
-                      + flutterDepthR_actual_ * burstAmountR_ * flutterR;
+        // Combine modulations (simple addition - wow + flutter)
+        float devSecR = wowDepthR_actual_ * wowR + flutterDepthR_actual_ * flutterR;
 
         devSecL = Clamp(devSecL, -kMaxDevSec, kMaxDevSec);
         devSecR = Clamp(devSecR, -kMaxDevSec, kMaxDevSec);
@@ -333,9 +230,9 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         float targetSamplesL = readSecL * sampleRate_;
         float targetSamplesR = readSecR * sampleRate_;
 
-        // Slew-rate limiter: smoothly approach target instead of hard clamping
-        // This prevents discontinuities that create aliasing
-        const float slewAlpha = 0.60f;  // Smoothing (lower = faster response, less smoothing)
+        // Gentle slew-rate limiter: smoothly approach target to prevent clicks
+        // Lower alpha = more responsive, higher = more smoothing
+        const float slewAlpha = 0.85f;  // Light smoothing - keeps effect audible
         float smoothTargetL = slewAlpha * readStateL_ + (1.0f - slewAlpha) * targetSamplesL;
         float smoothTargetR = slewAlpha * readStateR_ + (1.0f - slewAlpha) * targetSamplesR;
 
