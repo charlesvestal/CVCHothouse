@@ -61,15 +61,15 @@ Authentic tape degradation with musical character - designed for lo-fi vibes, vi
 #### Toggle 3 - Lo-Fi Compression
 - **Up (Off)**: No compression, clean signal
 - **Middle (Light)**: Musical AGC pumping
-  - 45% threshold, 8:1 upward ratio
-  - 400ms release (moderate breathing)
-  - Hiss gently swells during quiet parts
+  - 10× maximum boost on quiet signals
+  - Smooth, gradual swell after notes decay
+  - Hiss breathes naturally with the music
 - **Down (Heavy)**: Extreme cassette deck pumping
-  - 65% threshold, 18:1 upward ratio
-  - 800ms release (dramatic breathing)
-  - Hiss ROARS up during quiet passages (lo-fi magic!)
+  - 20× maximum boost on quiet signals
+  - Very slow, dramatic swell (several seconds)
+  - Hiss ROARS up after notes fade (lo-fi magic!)
 
-**How it works:** Upward compression boosts quiet signals (including background hiss), making the noise floor "breathe" with the dynamics just like a cheap cassette deck's AGC circuit. The slow release times create that classic pumping effect.
+**How it works:** Upward compression boosts quiet signals (including background hiss), making the noise floor "breathe" with the dynamics just like a cheap cassette deck's AGC circuit. When a note decays, the gain slowly creeps up over several seconds, creating that classic dramatic pumping effect where the hiss gradually swells from quiet to loud.
 
 ### Footswitch
 - **Footswitch 1**: True bypass on/off
@@ -84,7 +84,7 @@ Authentic tape degradation with musical character - designed for lo-fi vibes, vi
 
 **Tone Control:** Shapes the frequency response from dark and muffled (cassette deck) to bright and open. Works in tandem with the tape speed setting for creative filtering.
 
-**Lo-Fi Compressor:** The secret sauce! Makes quiet passages louder, causing the background hiss to swell up dramatically between notes or during decay. Creates that classic cassette deck "breathing" effect where the noise floor pumps with the music.
+**Lo-Fi Compressor:** The secret sauce! Uses smooth, artifact-free upward compression to boost quiet passages, causing the background hiss to slowly swell up over several seconds after notes fade. Creates that classic cassette deck "breathing" effect where the noise floor gradually rises and falls with your playing. The extremely slow gain changes ensure musical pumping without digital artifacts.
 
 ## Tips & Techniques
 

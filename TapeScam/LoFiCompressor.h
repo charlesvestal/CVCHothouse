@@ -17,6 +17,10 @@ class LoFiCompressor
     float envelopeL_ = 0.0f;
     float envelopeR_ = 0.0f;
 
+    // Gain smoothing state (prevents rapid gain modulation artifacts)
+    float smoothedGainL_ = 1.0f;
+    float smoothedGainR_ = 1.0f;
+
     // AGC parameters (attack/release for envelope)
     float attackCoeff_ = 0.0f;
     float releaseCoeff_ = 0.0f;

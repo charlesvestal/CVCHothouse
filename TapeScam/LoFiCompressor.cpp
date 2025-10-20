@@ -7,6 +7,8 @@ void LoFiCompressor::Init(float sampleRate)
     mode_ = 0;
     envelopeL_ = 0.0f;
     envelopeR_ = 0.0f;
+    smoothedGainL_ = 1.0f;
+    smoothedGainR_ = 1.0f;
     UpdateParameters();
 }
 
@@ -19,8 +21,8 @@ void LoFiCompressor::SetMode(int mode)
 void LoFiCompressor::UpdateParameters()
 {
     // Calculate envelope follower coefficients
-    const float attackMs = mode_ == 2 ? 2.0f : 5.0f;  // Very fast attack
-    const float releaseMs = mode_ == 2 ? 800.0f : 400.0f;  // VERY slow release = extreme pumping
+    const float attackMs = mode_ == 2 ? 2.0f : 5.0f;  // Fast attack (ducking)
+    const float releaseMs = mode_ == 2 ? 800.0f : 400.0f;  // Back to original timing - start swell sooner
 
     attackCoeff_ = expf(-1.0f / (sampleRate_ * attackMs * 0.001f));
     releaseCoeff_ = expf(-1.0f / (sampleRate_ * releaseMs * 0.001f));
@@ -55,17 +57,15 @@ float LoFiCompressor::ProcessGain(float envelope, float inputLevel)
     // Upward compression: boost signals below threshold
     if(envelope < threshold_)
     {
-        // Calculate how much boost to apply
-        float reduction = threshold_ - envelope;  // How far below threshold
-        float boost = reduction * (ratio_ - 1.0f) / ratio_;  // Upward gain
+        // Simple linear boost calculation - much smoother than exponential
+        // This creates less intermodulation distortion
+        float reduction = threshold_ - envelope;  // How far below threshold (0.0 to threshold_)
 
-        // Convert to linear gain (add boost in dB-ish space)
-        float gainDB = boost * 30.0f;  // Scale to dB-like range (middle ground)
-        float gain = powf(10.0f, gainDB / 20.0f);
-
-        // Reasonable max boost for musical pumping
-        float maxBoost = mode_ == 2 ? 20.0f : 12.0f;
-        gain = gain > maxBoost ? maxBoost : gain;
+        // Linear mapping instead of exponential to reduce artifacts
+        // Increased boost for dramatic AGC pumping effect
+        float maxBoost = mode_ == 2 ? 20.0f : 10.0f;  // Maximum gain multiplier - EXTREME pumping!
+        float normalizedReduction = reduction / threshold_;  // 0.0 to 1.0
+        float gain = 1.0f + (maxBoost - 1.0f) * normalizedReduction;  // Linear ramp
 
         return gain * makeupGain_;
     }
@@ -97,16 +97,32 @@ void LoFiCompressor::Process(float* left, float* right, size_t size)
         envelopeL_ = envCoeffL * envelopeL_ + (1.0f - envCoeffL) * absL;
         envelopeR_ = envCoeffR * envelopeR_ + (1.0f - envCoeffR) * absR;
 
-        // Calculate gain for each channel
-        float gainL = ProcessGain(envelopeL_, absL);
-        float gainR = ProcessGain(envelopeR_, absR);
+        // Calculate target gain for each channel
+        float targetGainL = ProcessGain(envelopeL_, absL);
+        float targetGainR = ProcessGain(envelopeR_, absR);
+
+        // Smooth the gain changes to prevent rapid modulation artifacts
+        // Use asymmetric smoothing: faster when gain is dropping (attack on loud signal),
+        // slower when gain is rising (release/swell on quiet signal) for dramatic pumping
+        float gainAttackCoeff = 0.2f;        // Very fast ducking when loud signal comes in
+        float gainReleaseCoeff = 0.000125f;  // GLACIALLY slow fade/swell (4× slower!)
+
+        float smoothCoeffL = (targetGainL < smoothedGainL_) ? gainAttackCoeff : gainReleaseCoeff;
+        float smoothCoeffR = (targetGainR < smoothedGainR_) ? gainAttackCoeff : gainReleaseCoeff;
+
+        smoothedGainL_ += (targetGainL - smoothedGainL_) * smoothCoeffL;
+        smoothedGainR_ += (targetGainR - smoothedGainR_) * smoothCoeffR;
+
+        // Limit gain to prevent any possibility of clipping
+        // This prevents the output from exceeding ±1.0 without needing saturation
+        float maxGainL = absL > 0.001f ? 0.95f / absL : smoothedGainL_;
+        float maxGainR = absR > 0.001f ? 0.95f / absR : smoothedGainR_;
+
+        float finalGainL = smoothedGainL_ < maxGainL ? smoothedGainL_ : maxGainL;
+        float finalGainR = smoothedGainR_ < maxGainR ? smoothedGainR_ : maxGainR;
 
         // Apply gain (this will boost quiet parts, making hiss louder)
-        left[i] = inL * gainL;
-        right[i] = inR * gainR;
-
-        // Soft clip to prevent overs
-        left[i] = left[i] > 1.0f ? 1.0f : (left[i] < -1.0f ? -1.0f : left[i]);
-        right[i] = right[i] > 1.0f ? 1.0f : (right[i] < -1.0f ? -1.0f : right[i]);
+        left[i] = inL * finalGainL;
+        right[i] = inR * finalGainR;
     }
 }
