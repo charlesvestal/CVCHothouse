@@ -216,59 +216,30 @@ float TapeSatModule::AsymmetricSaturation(float input, float asymmetry) const
 
 float TapeSatModule::TapeSaturationCurve(float input, float satAmount) const
 {
-    // Improved tape saturation with smooth transitions (no hard thresholds)
-    // Uses smooth blending between regions to reduce harmonic distortion
+    // Original multi-stage tape saturation (restored for authentic sound):
+    // 1. Soft knee compression (low levels)
+    // 2. Asymmetric saturation (mid levels) - creates even harmonics
+    // 3. Hard limiting (high levels)
 
     const float absIn = fabsf(input);
 
-    // Smooth transition zones using crossfade regions
-    // Low: 0.0-0.4, Mid: 0.3-0.8, High: 0.7+
-
-    // Calculate blend factors (0-1) for each region
-    float lowBlend = 1.0f;
-    float midBlend = 0.0f;
-    float highBlend = 0.0f;
-
     if(absIn < 0.3f)
     {
-        lowBlend = 1.0f;
-        midBlend = 0.0f;
-    }
-    else if(absIn < 0.4f)
-    {
-        // Smooth crossfade from low to mid (0.3 → 0.4)
-        float t = (absIn - 0.3f) / 0.1f;  // 0→1
-        lowBlend = 1.0f - t;
-        midBlend = t;
+        // Low level - mostly clean with slight compression
+        return input * (1.0f + satAmount * 0.1f);
     }
     else if(absIn < 0.7f)
     {
-        lowBlend = 0.0f;
-        midBlend = 1.0f;
-    }
-    else if(absIn < 0.8f)
-    {
-        // Smooth crossfade from mid to high (0.7 → 0.8)
-        float t = (absIn - 0.7f) / 0.1f;  // 0→1
-        midBlend = 1.0f - t;
-        highBlend = t;
+        // Mid level - asymmetric saturation zone
+        float asymSat = AsymmetricSaturation(input, asymmetryAmount_);
+        // Blend based on saturation amount
+        return input * (1.0f - satAmount) + asymSat * satAmount;
     }
     else
     {
-        midBlend = 0.0f;
-        highBlend = 1.0f;
+        // High level - hard tape saturation
+        return tanhf(input * (1.0f + satAmount * 2.0f));
     }
-
-    // Calculate output for each region
-    float lowOut = input * (1.0f + satAmount * 0.1f);  // Clean with slight boost
-    float midOut = AsymmetricSaturation(input, asymmetryAmount_);  // Asymmetric warmth
-    float highOut = tanhf(input * (1.0f + satAmount * 2.0f));  // Hard tape saturation
-
-    // Blend based on satAmount
-    midOut = input * (1.0f - satAmount) + midOut * satAmount;
-
-    // Smooth blend between regions
-    return lowOut * lowBlend + midOut * midBlend + highOut * highBlend;
 }
 
 void TapeSatModule::Process(float** buffers, size_t size)
