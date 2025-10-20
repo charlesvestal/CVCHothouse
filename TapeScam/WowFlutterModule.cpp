@@ -11,7 +11,8 @@ namespace
 constexpr float kTwoPi = 6.283185307179586476925286766559f;
 constexpr float kBaseDelayMsL = 12.0f;
 constexpr float kBaseDelayMsR = 15.0f;
-constexpr float kMaxDeltaSamples = 0.9f;
+// Derivative limiter: max rate of change (samples per sample)
+constexpr float kMaxDeltaSamples = 0.35f;  // Reduced from 0.9 to prevent aliasing
 }
 
 void WowFlutterModule::Init(float sampleRate)
@@ -332,8 +333,14 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         float targetSamplesL = readSecL * sampleRate_;
         float targetSamplesR = readSecR * sampleRate_;
 
-        float deltaL = targetSamplesL - readStateL_;
-        float deltaR = targetSamplesR - readStateR_;
+        // Slew-rate limiter: smoothly approach target instead of hard clamping
+        // This prevents discontinuities that create aliasing
+        const float slewAlpha = 0.60f;  // Smoothing (lower = faster response, less smoothing)
+        float smoothTargetL = slewAlpha * readStateL_ + (1.0f - slewAlpha) * targetSamplesL;
+        float smoothTargetR = slewAlpha * readStateR_ + (1.0f - slewAlpha) * targetSamplesR;
+
+        float deltaL = smoothTargetL - readStateL_;
+        float deltaR = smoothTargetR - readStateR_;
 
         // Track max read delta for debugging
         float absDeltaL = fabsf(deltaL);
@@ -341,12 +348,9 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         if(absDeltaL > maxReadDeltaSamplesL_) maxReadDeltaSamplesL_ = absDeltaL;
         if(absDeltaR > maxReadDeltaSamplesR_) maxReadDeltaSamplesR_ = absDeltaR;
 
-        if(deltaL > kMaxDeltaSamples) deltaL = kMaxDeltaSamples;
-        else if(deltaL < -kMaxDeltaSamples) deltaL = -kMaxDeltaSamples;
-        if(deltaR > kMaxDeltaSamples) deltaR = kMaxDeltaSamples;
-        else if(deltaR < -kMaxDeltaSamples) deltaR = -kMaxDeltaSamples;
-        readStateL_ += deltaL;
-        readStateR_ += deltaR;
+        // Apply smooth delta (no hard clamp - already limited by slew)
+        readStateL_ = smoothTargetL;
+        readStateR_ = smoothTargetR;
 
         float readIndexL = static_cast<float>(writeIndex_) - readStateL_;
         float readIndexR = static_cast<float>(writeIndex_) - readStateR_;

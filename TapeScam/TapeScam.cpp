@@ -3,7 +3,7 @@
 #include "WowFlutterModule.h"
 #include "HissDropModule.h"
 #include "ToneModule.h"
-#include "ReverbModule.h"
+#include "LoFiCompressor.h"
 #include <algorithm>
 #include <cmath>
 #include "daisysp.h"
@@ -34,12 +34,12 @@ enum TapeSpeedMode
     SPEED_LOFI     = 2   // Corresponds to TOGGLESWITCH_DOWN
 };
 
-// Reverb/Ambience modes for Toggle Switch 3
-enum ReverbMode
+// Lo-Fi Compression modes for Toggle Switch 3
+enum CompressionMode
 {
-    REV_OFF        = 0,  // Corresponds to TOGGLESWITCH_UP
-    REV_LIGHT_ROOM = 1,  // Corresponds to TOGGLESWITCH_MIDDLE
-    REV_PLATE_HALL = 2   // Corresponds to TOGGLESWITCH_DOWN
+    COMP_OFF   = 0,  // Corresponds to TOGGLESWITCH_UP
+    COMP_LIGHT = 1,  // Corresponds to TOGGLESWITCH_MIDDLE (gentle AGC, hiss breathes)
+    COMP_HEAVY = 2   // Corresponds to TOGGLESWITCH_DOWN (aggressive pumping, lots of hiss)
 };
 
 Hothouse         hw;
@@ -48,7 +48,7 @@ TapeSatModule    tapeSat;
 WowFlutterModule tapeWobble;
 HissDropModule   tapeNoise;
 ToneModule       tapeTone;
-ReverbModule     reverb;
+LoFiCompressor   lofiComp;
 Led              ledBypass;
 Led              ledBoost;
 
@@ -59,9 +59,9 @@ static float globalLevelCurrent = 0.707f;
 static constexpr float kLevelSmooth = 0.01f;
 
 // Toggle state tracking
-static TapeAgeMode currentAgeMode = AGE_USED;          // Default to Used tape
+static TapeAgeMode currentAgeMode = AGE_USED;              // Default to Used tape
 static TapeSpeedMode currentSpeedMode = SPEED_STANDARD;    // Default to Standard speed
-static ReverbMode currentReverbMode = REV_OFF;         // Default to Reverb Off
+static CompressionMode currentCompMode = COMP_OFF;         // Default to Compression Off
 
 // Separate parameter adjustments from each toggle (for proper accumulation/combination)
 static float ageHeadroomAdj_dB = -1.0f;   // Age mode headroom adjustment
@@ -249,88 +249,35 @@ void HandleTapeSpeedToggle()
     }
 }
 
-void HandleReverbToggle()
+void HandleCompressionToggle()
 {
     // Read Toggle Switch 3 position
     auto togglePos = hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3);
 
-    // Map toggle position to ReverbMode
-    ReverbMode revMode = REV_OFF;  // Safe default
+    // Map toggle position to CompressionMode
+    CompressionMode compMode = COMP_OFF;  // Safe default
     switch(togglePos)
     {
         case Hothouse::TOGGLESWITCH_UP:
-            revMode = REV_OFF;
+            compMode = COMP_OFF;
             break;
         case Hothouse::TOGGLESWITCH_MIDDLE:
-            revMode = REV_LIGHT_ROOM;
+            compMode = COMP_LIGHT;
             break;
         case Hothouse::TOGGLESWITCH_DOWN:
-            revMode = REV_PLATE_HALL;
+            compMode = COMP_HEAVY;
             break;
         case Hothouse::TOGGLESWITCH_UNKNOWN:
         default:
-            revMode = REV_OFF;
+            compMode = COMP_OFF;
             break;
     }
 
     // Only update parameters if mode changed
-    if(revMode != currentReverbMode)
+    if(compMode != currentCompMode)
     {
-        currentReverbMode = revMode;
-
-        // Define parameters for each reverb mode
-        float reverbMix;
-        float reverbDecayTime;
-        float feedbackLPF;   // Anti-alias filter on feedback path
-        float postFilterLPF; // Anti-alias filter on output
-        float modDepth;      // Modulation depth
-        float modRate;       // Modulation rate
-
-        switch(revMode)
-        {
-            case REV_OFF:
-                reverbMix       = 0.0f;
-                reverbDecayTime = 0.0f;
-                feedbackLPF     = 10000.0f;
-                postFilterLPF   = 12000.0f;
-                modDepth        = 0.0f;
-                modRate         = 0.0f;
-                break;
-
-            case REV_LIGHT_ROOM:
-                reverbMix       = 0.25f;   // 25% wet
-                reverbDecayTime = 1.8f;    // 1.8 second tail
-                feedbackLPF     = 10000.0f;  // 10kHz anti-alias on feedback
-                postFilterLPF   = 12000.0f;  // 12kHz anti-alias on output
-                modDepth        = 0.0008f;   // Very subtle modulation
-                modRate         = 0.30f;     // 0.3Hz modulation
-                break;
-
-            case REV_PLATE_HALL:
-                reverbMix       = 0.40f;   // 40% wet
-                reverbDecayTime = 4.5f;    // 4.5 second tail (reduced from 5s)
-                feedbackLPF     = 9000.0f;   // 9kHz anti-alias on feedback
-                postFilterLPF   = 12000.0f;  // 12kHz anti-alias on output
-                modDepth        = 0.0015f;   // Subtle modulation for character
-                modRate         = 0.35f;     // 0.35Hz modulation
-                break;
-
-            default:
-                reverbMix       = 0.0f;
-                reverbDecayTime = 0.0f;
-                feedbackLPF     = 10000.0f;
-                postFilterLPF   = 12000.0f;
-                modDepth        = 0.0f;
-                modRate         = 0.0f;
-                break;
-        }
-
-        // Apply reverb parameters
-        reverb.SetMix(reverbMix);
-        reverb.SetDecayTime(reverbDecayTime);
-        reverb.SetFeedbackLowpassCutoff(feedbackLPF);
-        reverb.SetPostFilterCutoff(postFilterLPF);
-        reverb.SetModulation(modDepth, modRate);
+        currentCompMode = compMode;
+        lofiComp.SetMode(static_cast<int>(compMode));
     }
 }
 
@@ -340,7 +287,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     HandleFootswitches();
     HandleTapeAgeToggle();
     HandleTapeSpeedToggle();
-    HandleReverbToggle();
+    HandleCompressionToggle();
 
     auto params = BuildParams();
     gainStage.SetPendingParams(params);
@@ -358,8 +305,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 
     tapeTone.SetAmount(hw.GetKnobValue(Hothouse::KNOB_5));
     tapeTone.UpdateControls();
-
-    reverb.UpdateControls();
 
     // Update global level control
     const float levelKnob = hw.GetKnobValue(Hothouse::KNOB_6);
@@ -383,15 +328,15 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         tapeNoise.Process(out, out, size);
         tapeTone.Process(out, out, size);
 
-        // Apply global level BEFORE reverb
+        // Lo-Fi compression BEFORE level control (makes hiss breathe dramatically!)
+        lofiComp.Process(out[0], out[1], size);
+
+        // Apply global level (trim) after compression
         for(size_t i = 0; i < size; ++i)
         {
             out[0][i] = ClampLevel(out[0][i] * globalLevelCurrent, -1.0f, 1.0f);
             out[1][i] = ClampLevel(out[1][i] * globalLevelCurrent, -1.0f, 1.0f);
         }
-
-        // Reverb after level control (so knob 6 controls reverb input)
-        reverb.Process(out, out, size);
     }
 }
 
@@ -415,7 +360,7 @@ int main()
     tapeWobble.SetAmount(0.0f);
     tapeNoise.Init(sampleRateHz, 2);
     tapeTone.Init(sampleRateHz, 2);
-    reverb.Init(sampleRateHz);
+    lofiComp.Init(sampleRateHz);
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
