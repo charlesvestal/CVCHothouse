@@ -53,10 +53,14 @@ class TapeSatModule
     float tapeDriveLin_ = 1.0f;
     float tapeSaturationFactor_ = 0.0f;
     float tapeCompressionRatio_ = 1.0f;
+    float preSatLPFCutoff_ = 20000.0f;  // Pre-sat anti-alias filter cutoff
     float hfRollOffCutoff_ = 20000.0f;
     float biasGain_ = 1.0f;
     float asymmetryAmount_ = 0.0f;  // Even-order harmonic generation
     float bassCompressionRatio_ = 1.0f;  // Frequency-dependent compression
+
+    // Pre-saturation anti-aliasing filter (band-limits input before nonlinearity)
+    daisysp::Svf preSatLPF_[2];  // Removes ultra-HF content to reduce aliasing
 
     // Biquad per channel for HF roll-off
     daisysp::Svf hfRollOff_[2];

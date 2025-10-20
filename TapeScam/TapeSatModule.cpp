@@ -34,6 +34,16 @@ void TapeSatModule::Init(float sampleRate)
     compEnvelopeL_ = 0.0f;
     compEnvelopeR_ = 0.0f;
 
+    // Initialize pre-saturation anti-aliasing filters
+    // Band-limits input before nonlinear saturation to reduce aliasing
+    for(auto& svf : preSatLPF_)
+    {
+        svf.Init(sampleRate_);
+        svf.SetFreq(preSatLPFCutoff_);
+        svf.SetRes(0.707f);
+        svf.SetDrive(1.0f);
+    }
+
     // Initialize HF rolloff filters
     for(auto& svf : hfRollOff_)
     {
@@ -77,10 +87,22 @@ void TapeSatModule::SetHFRolloffCutoff(float cutoffHz)
     if(cutoffHz > 0.0f)
     {
         hfRolloffOverride_ = Clamp(cutoffHz, 8000.0f, 22000.0f);
+
+        // Set pre-saturation filter based on tape speed mode
+        // Slower tape (lower cutoff) = more limited HF response before saturation
+        // This reduces aliasing by band-limiting input before nonlinearity
+        if(cutoffHz <= 8000.0f) {
+            preSatLPFCutoff_ = 16000.0f;  // SPEED_LOFI
+        } else if(cutoffHz <= 14000.0f) {
+            preSatLPFCutoff_ = 20000.0f;  // SPEED_STANDARD
+        } else {
+            preSatLPFCutoff_ = 24000.0f;  // SPEED_HIGH
+        }
     }
     else
     {
         hfRolloffOverride_ = 0.0f;  // Disable override
+        preSatLPFCutoff_ = 20000.0f;  // Default
     }
     paramsDirty_ = true;
 }
@@ -114,8 +136,18 @@ void TapeSatModule::UpdateControls()
     bassCompressionRatio_ = kCompMin + drive * (kCompRange * 0.6f);
 
     // Asymmetry creates even-order harmonics (tape hysteresis)
-    // More saturation = more asymmetric transfer function
-    asymmetryAmount_ = drive * 0.25f;  // Up to 25% asymmetry at full drive
+    // Dead zone below 0.1 drive = symmetric (linear tape region)
+    // Above 0.1: quadratic mapping for smooth growth
+    if(drive < 0.1f)
+    {
+        asymmetryAmount_ = 0.0f;  // Clean, symmetric response
+    }
+    else
+    {
+        // Quadratic mapping: (drive - 0.1)^2 scaled to 0.0 → 0.35
+        float driveScaled = (drive - 0.1f) / 0.9f;  // Normalize to 0-1
+        asymmetryAmount_ = driveScaled * driveScaled * 0.35f;  // Up to 35% asymmetry
+    }
 
     // Use override cutoff if set, otherwise calculate based on drive
     if(hfRolloffOverride_ > 0.0f)
@@ -129,9 +161,21 @@ void TapeSatModule::UpdateControls()
 
     biasGain_             = 1.0f + drive * kBiasRange;
 
+    // Update pre-saturation anti-aliasing filter
+    for(auto& svf : preSatLPF_)
+    {
+        svf.SetFreq(preSatLPFCutoff_);
+        svf.SetRes(0.707f);
+        svf.SetDrive(1.0f);
+    }
+
+    // Update post-saturation HF rolloff (main anti-aliasing defense)
+    // Drive-dependent: 20kHz at drive=0 → 12kHz at drive=1
+    // This kills high-order harmonics from tanh() before they alias
+    float postSatCutoff = 20000.0f - drive * 8000.0f;  // 20kHz → 12kHz
     for(auto& svf : hfRollOff_)
     {
-        svf.SetFreq(hfRollOffCutoff_);
+        svf.SetFreq(postSatCutoff);
         svf.SetRes(0.707f);
         svf.SetDrive(1.0f);
     }
@@ -172,30 +216,59 @@ float TapeSatModule::AsymmetricSaturation(float input, float asymmetry) const
 
 float TapeSatModule::TapeSaturationCurve(float input, float satAmount) const
 {
-    // Multi-stage tape saturation:
-    // 1. Soft knee compression (low levels)
-    // 2. Asymmetric saturation (mid levels) - creates even harmonics
-    // 3. Hard limiting (high levels)
+    // Improved tape saturation with smooth transitions (no hard thresholds)
+    // Uses smooth blending between regions to reduce harmonic distortion
 
     const float absIn = fabsf(input);
 
+    // Smooth transition zones using crossfade regions
+    // Low: 0.0-0.4, Mid: 0.3-0.8, High: 0.7+
+
+    // Calculate blend factors (0-1) for each region
+    float lowBlend = 1.0f;
+    float midBlend = 0.0f;
+    float highBlend = 0.0f;
+
     if(absIn < 0.3f)
     {
-        // Low level - mostly clean with slight compression
-        return input * (1.0f + satAmount * 0.1f);
+        lowBlend = 1.0f;
+        midBlend = 0.0f;
+    }
+    else if(absIn < 0.4f)
+    {
+        // Smooth crossfade from low to mid (0.3 → 0.4)
+        float t = (absIn - 0.3f) / 0.1f;  // 0→1
+        lowBlend = 1.0f - t;
+        midBlend = t;
     }
     else if(absIn < 0.7f)
     {
-        // Mid level - asymmetric saturation zone
-        float asymSat = AsymmetricSaturation(input, asymmetryAmount_);
-        // Blend based on saturation amount
-        return input * (1.0f - satAmount) + asymSat * satAmount;
+        lowBlend = 0.0f;
+        midBlend = 1.0f;
+    }
+    else if(absIn < 0.8f)
+    {
+        // Smooth crossfade from mid to high (0.7 → 0.8)
+        float t = (absIn - 0.7f) / 0.1f;  // 0→1
+        midBlend = 1.0f - t;
+        highBlend = t;
     }
     else
     {
-        // High level - hard tape saturation
-        return tanhf(input * (1.0f + satAmount * 2.0f));
+        midBlend = 0.0f;
+        highBlend = 1.0f;
     }
+
+    // Calculate output for each region
+    float lowOut = input * (1.0f + satAmount * 0.1f);  // Clean with slight boost
+    float midOut = AsymmetricSaturation(input, asymmetryAmount_);  // Asymmetric warmth
+    float highOut = tanhf(input * (1.0f + satAmount * 2.0f));  // Hard tape saturation
+
+    // Blend based on satAmount
+    midOut = input * (1.0f - satAmount) + midOut * satAmount;
+
+    // Smooth blend between regions
+    return lowOut * lowBlend + midOut * midBlend + highOut * highBlend;
 }
 
 void TapeSatModule::Process(float** buffers, size_t size)
@@ -216,10 +289,14 @@ void TapeSatModule::Process(float** buffers, size_t size)
 
     for(size_t i = 0; i < size; ++i)
     {
-        float xL = buffers[0][i] * driveLin * bias;
-        float xR = buffers[1][i] * driveLin * bias;
+        // 1. Pre-saturation anti-aliasing filter (band-limit input before nonlinearity)
+        // Removes ultra-HF content to prevent aliasing from tanh() harmonics
+        preSatLPF_[0].Process(buffers[0][i]);
+        preSatLPF_[1].Process(buffers[1][i]);
+        float xL = preSatLPF_[0].Low() * driveLin * bias;
+        float xR = preSatLPF_[1].Low() * driveLin * bias;
 
-        // Split into bass and mids/highs for frequency-dependent processing
+        // 2. Split into bass and mids/highs for frequency-dependent processing
         crossover_[0].Process(xL);
         crossover_[1].Process(xR);
 
