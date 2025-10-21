@@ -139,14 +139,8 @@ public:
     // Runtime decay control (0.0 to 1.0 range)
     void SetDecayTime(float decay) {
         // Scale vWALL (reflection feedback)
-        // Higher values = longer decay
-        // Range: 0.5x (decay=0) -> 1.0x (decay=0.5) -> 3.0x (decay=1.0)
-        float wall_scale;
-        if (decay < 0.5f) {
-            wall_scale = 0.5f + decay;  // 0.5x to 1.0x
-        } else {
-            wall_scale = 1.0f + (decay - 0.5f) * 4.0f;  // 1.0x to 3.0x
-        }
+        // Range: 0.5x (decay=0) -> 1.0x (decay=1.0, authentic PSX)
+        float wall_scale = 0.5f + (decay * 0.5f);  // 0.5x to 1.0x
         p_.vWALL_f = preset_base_.vWALL_f * wall_scale;
     }
 

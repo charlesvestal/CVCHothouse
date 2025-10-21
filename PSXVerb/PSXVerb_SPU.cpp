@@ -136,7 +136,7 @@ int main()
         float preset_knob = hw.GetKnobValue(Hothouse::KNOB_1);
         int preset_idx = static_cast<int>(preset_knob * (PsxPresets::kNumPresets - 0.01f));
 
-        // Knob 4: Decay time (0.5x to 3.0x feedback, 50% = 1.0x)
+        // Knob 4: Decay time (0.5x to 1.0x, 100% = authentic)
         float decay = hw.GetKnobValue(Hothouse::KNOB_4);
         reverb.SetDecayTime(decay);
 
