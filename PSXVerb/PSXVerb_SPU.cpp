@@ -158,12 +158,15 @@ int main()
             InitReverb(preset_idx);
             last_preset_change = now;
 
-            // Blink LED2 to indicate preset change
-            led2.Set(1.0f);
-            led2.Update();
-            System::Delay(50);
-            led2.Set(0.0f);
-            led2.Update();
+            // Flash LED1 N times to indicate preset number (1-6)
+            for (int i = 0; i < preset_idx + 1; i++) {
+                led1.Set(0.0f);  // ON (active low)
+                led1.Update();
+                System::Delay(150);
+                led1.Set(1.0f);  // OFF (active low)
+                led1.Update();
+                System::Delay(150);
+            }
         }
 
         // Footswitch: Bypass toggle
