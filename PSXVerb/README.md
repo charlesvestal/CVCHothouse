@@ -1,5 +1,9 @@
 # PSXVerb - Authentic PlayStation SPU Reverb
 
+
+https://github.com/user-attachments/assets/dd6fbded-8949-4f11-ae72-cafdf5b99798
+
+
 A faithful recreation of the PlayStation 1 SPU reverb algorithm for the Daisy Seed / Hothouse platform, based on official PSX-SPX documentation and reference implementations.
 
 ## Features
