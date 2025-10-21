@@ -23,15 +23,15 @@ Built for **Hothouse** pedal platform (Daisy Seed based):
 
 ### Knobs
 - **K1**: Preset Selection (Room → Studio Small → Studio Medium → Studio Large → Hall → Space Echo)
-- **K2-K3**: *(Unused - set to 12 o'clock for neutral)*
-- **K4**: Decay Time (0.5x to 3x - reverb tail length, **50% = authentic PSX**)
-- **K5**: *(Unused - set to 12 o'clock for neutral)*
+- **K2-K3**: *(Unused)*
+- **K4**: Decay Time (0.5x to 1.0x - **100% = authentic PSX**, 0% = shorter)
+- **K5**: Reverb Level (0x to 4x - **50% = unity/2x**, 100% = hot)
 - **K6**: Dry/Wet Mix (0% = dry, 100% = wet)
 
 ### Footswitch & LEDs
-- **Footswitch 1**: Bypass toggle
-- **LED1**: Active indicator (on when processing)
-- **LED2**: Mix level indicator
+- **Footswitch 1**: Bypass toggle (hold 1 second to enter DFU mode)
+- **LED1**: Active indicator (ON when reverb enabled, OFF when bypassed)
+- **LED2**: Mix level indicator (brightness tracks K6: OFF at 0%, BRIGHT at 100%)
 
 ## Technical Details
 
@@ -100,7 +100,7 @@ make program-dfu
 
 ## Memory Usage
 
-- **FLASH**: 80,536 bytes (61.44% of 128KB)
+- **FLASH**: 81,640 bytes (62.29% of 128KB)
 - **SRAM**: 16,132 bytes (3.08% of 512KB)
 - **Work buffer**: Varies by preset (largest is Space Echo at ~62KB)
 
