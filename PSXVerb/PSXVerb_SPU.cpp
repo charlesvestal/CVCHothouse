@@ -24,8 +24,8 @@ bool bypass_ = true;
 int current_preset_ = 0;  // Start with Room
 float sample_rate_ = 48000.0f;
 
-// Block size
-constexpr size_t kBlockSize = 16;
+// Block size (reduced to 4 to minimize digital artifacts/whine)
+constexpr size_t kBlockSize = 4;
 
 // Mix parameter with smoothing
 struct ParamSmoother {
