@@ -140,6 +140,10 @@ int main()
         float decay = hw.GetKnobValue(Hothouse::KNOB_4);
         reverb.SetDecayTime(decay);
 
+        // Knob 5: Reverb level (0x to 4x, 50% = 2x unity)
+        float level = hw.GetKnobValue(Hothouse::KNOB_5);
+        reverb.SetReverbLevel(level);
+
         // Knob 6: Dry/Wet Mix
         float mix_target = hw.GetKnobValue(Hothouse::KNOB_6);
         smMix.Process(mix_target);

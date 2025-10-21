@@ -144,6 +144,16 @@ public:
         p_.vWALL_f = preset_base_.vWALL_f * wall_scale;
     }
 
+    // Runtime reverb output level control (0.0 to 1.0 range)
+    void SetReverbLevel(float level) {
+        // Scale vLOUT/vROUT (output volume)
+        // Range: 0x (level=0) -> 4x (level=1.0)
+        // 50% = 2x = unity gain for most presets
+        float level_scale = level * 4.0f;  // 0x to 4x
+        p_.vLOUT_f = preset_base_.vLOUT_f * level_scale;
+        p_.vROUT_f = preset_base_.vROUT_f * level_scale;
+    }
+
 private:
     // Store original preset for runtime scaling
     struct ScaledPreset {
