@@ -154,3 +154,6 @@ make program-dfu
 
 This implementation is based on publicly documented PSX SPU behavior. See individual source files for license details.
 
+
+## Inspiration
+Inspired by Shirobon's lovely [PS1 Impulse Responses](https://shirobon.bandcamp.com/album/ps1-reverb-impulse-responses)
