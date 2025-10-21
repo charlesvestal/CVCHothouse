@@ -168,10 +168,13 @@ int main()
         }
 
         // LED1: Active indicator (on when reverb enabled, off when bypassed)
-        led1.Set(bypass_ ? 0.0f : 1.0f);
+        // Note: LEDs are active_low, so invert the logic
+        led1.Set(bypass_ ? 1.0f : 0.0f);
 
         // LED2: Mix level indicator (brightness tracks K6)
-        led2.Set(smMix.value);
+        // Note: LEDs are active_low, so 0 = bright, 1 = off
+        // We want: K6=0% → LED off, K6=100% → LED bright
+        led2.Set(1.0f - smMix.value);
 
         // Update LED outputs
         led1.Update();
