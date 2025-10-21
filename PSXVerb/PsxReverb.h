@@ -136,29 +136,10 @@ public:
         if (work_buf_) work_.Init(work_buf_, work_.Size());
     }
 
-    // Runtime parameter controls (0.0 to 1.0 range)
-    void SetInputGain(float gain) {
-        // Scale vLIN/vRIN (input volume)
-        // PSX default is 0x8000 = 1.0, we allow 0.0 to 2.0
-        float scaled = gain * 2.0f;
-        p_.vLIN_f = scaled;
-        p_.vRIN_f = scaled;
-    }
-
-    void SetPreDelay(float amount) {
-        // Scale reflection delay offsets (dLSAME, dRSAME, dLDIFF, dRDIFF)
-        // Amount 0.5 = original, 0.0 = minimum (half), 1.0 = maximum (double)
-        float scale = 0.5f + amount;  // 0.5x to 1.5x
-        p_.dLSAME = static_cast<uint16_t>(preset_base_.dLSAME * scale);
-        p_.dRSAME = static_cast<uint16_t>(preset_base_.dRSAME * scale);
-        p_.dLDIFF = static_cast<uint16_t>(preset_base_.dLDIFF * scale);
-        p_.dRDIFF = static_cast<uint16_t>(preset_base_.dRDIFF * scale);
-    }
-
+    // Runtime decay control (0.0 to 1.0 range)
     void SetDecayTime(float decay) {
         // Scale vWALL (reflection feedback)
         // Higher values = longer decay
-        // PSX typical: vWALL around 0xB000 to 0xC000 (-0.31 to -0.25)
         // Range: 0.5x (decay=0) -> 1.0x (decay=0.5) -> 3.0x (decay=1.0)
         float wall_scale;
         if (decay < 0.5f) {
@@ -167,15 +148,6 @@ public:
             wall_scale = 1.0f + (decay - 0.5f) * 4.0f;  // 1.0x to 3.0x
         }
         p_.vWALL_f = preset_base_.vWALL_f * wall_scale;
-    }
-
-    void SetDamping(float damp) {
-        // Scale vIIR (IIR filter coefficient for HF damping)
-        // Higher vIIR = less damping (more HF), lower = more damping (less HF)
-        // PSX typical: 0x6000 to 0x7E00 (0.75 to 0.98)
-        // Inverse: damp=0 means preserve HF, damp=1 means cut HF
-        float iir_scale = 1.0f - (damp * 0.5f);  // 1.0x to 0.5x
-        p_.vIIR_f = preset_base_.vIIR_f * iir_scale;
     }
 
 private:

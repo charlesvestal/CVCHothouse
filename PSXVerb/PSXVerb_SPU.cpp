@@ -133,21 +133,9 @@ int main()
         float preset_knob = hw.GetKnobValue(Hothouse::KNOB_1);
         int preset_idx = static_cast<int>(preset_knob * (PsxPresets::kNumPresets - 0.01f));
 
-        // Knob 2: Input gain (0.0 to 2.0x)
-        float input_gain = hw.GetKnobValue(Hothouse::KNOB_2);
-        reverb.SetInputGain(input_gain);
-
-        // Knob 3: Pre delay (0.5x to 1.5x reflection delays)
-        float pre_delay = hw.GetKnobValue(Hothouse::KNOB_3);
-        reverb.SetPreDelay(pre_delay);
-
-        // Knob 4: Decay time (0.5x to 1.0x feedback)
+        // Knob 4: Decay time (0.5x to 3.0x feedback, 50% = 1.0x)
         float decay = hw.GetKnobValue(Hothouse::KNOB_4);
         reverb.SetDecayTime(decay);
-
-        // Knob 5: Damping (0 = bright, 1 = dark)
-        float damping = hw.GetKnobValue(Hothouse::KNOB_5);
-        reverb.SetDamping(damping);
 
         // Knob 6: Dry/Wet Mix
         float mix_target = hw.GetKnobValue(Hothouse::KNOB_6);

@@ -22,11 +22,10 @@ Built for **Hothouse** pedal platform (Daisy Seed based):
 ## Controls
 
 ### Knobs
-- **K1**: Preset (Room → Studio Small → Studio Medium → Studio Large → Hall → Space Echo)
-- **K2**: Input Gain (0x to 2x - drive the reverb harder/softer)
-- **K3**: Pre Delay (0.5x to 1.5x - initial gap before reverb)
-- **K4**: Decay Time (0.5x to 3x - reverb tail length, 50% = original)
-- **K5**: Damping (0% = bright, 100% = dark - high-frequency rolloff)
+- **K1**: Preset Selection (Room → Studio Small → Studio Medium → Studio Large → Hall → Space Echo)
+- **K2-K3**: *(Unused - set to 12 o'clock for neutral)*
+- **K4**: Decay Time (0.5x to 3x - reverb tail length, **50% = authentic PSX**)
+- **K5**: *(Unused - set to 12 o'clock for neutral)*
 - **K6**: Dry/Wet Mix (0% = dry, 100% = wet)
 
 ### Footswitch & LEDs
@@ -101,7 +100,7 @@ make program-dfu
 
 ## Memory Usage
 
-- **FLASH**: 80,720 bytes (61.58% of 128KB)
+- **FLASH**: 80,536 bytes (61.44% of 128KB)
 - **SRAM**: 16,132 bytes (3.08% of 512KB)
 - **Work buffer**: Varies by preset (largest is Space Echo at ~62KB)
 
