@@ -125,6 +125,9 @@ int main()
     while(1) {
         System::Delay(10);
 
+        // Check for DFU bootloader entry (hold FS1 for 1 second)
+        hw.CheckResetToBootloader();
+
         // Read ADC values
         hw.ProcessAnalogControls();
         hw.ProcessDigitalControls();
