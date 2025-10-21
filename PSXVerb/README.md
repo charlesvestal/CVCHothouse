@@ -23,7 +23,9 @@ Built for **Hothouse** pedal platform (Daisy Seed based):
 
 ### Knobs
 - **K1**: Preset Selection (Room → Studio Small → Studio Medium → Studio Large → Hall → Space Echo)
-- **K2-K3**: *(Unused)*
+  - *LED1 flashes N times to indicate preset number (1-6 flashes)*
+- **K2**: Input Gain (0x to 2x - **50% = unity/authentic***, 100% = hot input)
+- **K3**: Overall Output Gain (0x to 2x - **50% = unity**, only active when reverb enabled)
 - **K4**: Decay Time (0.5x to 1.0x - **100% = authentic PSX**, 0% = shorter)
 - **K5**: Reverb Level (0x to 4x - **50% = unity/2x**, 100% = hot)
 - **K6**: Dry/Wet Mix (0% = dry, 100% = wet)
@@ -100,9 +102,10 @@ make program-dfu
 
 ## Memory Usage
 
-- **FLASH**: 81,640 bytes (62.29% of 128KB)
-- **SRAM**: 16,132 bytes (3.08% of 512KB)
+- **FLASH**: 81,072 bytes (61.85% of 128KB)
+- **SRAM**: 16,140 bytes (3.08% of 512KB)
 - **Work buffer**: Varies by preset (largest is Space Echo at ~62KB)
+- **Audio block size**: 4 samples (83μs latency at 48kHz)
 
 ## Presets
 
@@ -124,18 +127,20 @@ make program-dfu
 
 ## Files
 
-- `PSXVerb_SPU.cpp` - Main firmware, Daisy integration, controls
-- `PsxReverb.h` - Core reverb DSP engine
-- `PsxPreset.h` - 6 PSX reverb preset definitions
-- `WorkArea.h` - SPU RAM emulation (circular buffer with saturation)
-- `Halfband39.h` - 39-tap halfband FIR for resampling
-- `hothouse.h` - Hothouse hardware abstraction
+- `PSXVerb_SPU.cpp` - Main firmware, Daisy integration, controls, audio callback
+- `PsxReverb.h` - Core reverb DSP engine with authentic PSX algorithm
+- `PsxPreset.h` - 6 PSX reverb preset definitions (from PSX-SPX docs)
+- `WorkArea.h` - SPU RAM emulation (circular buffer with int16 saturation)
+- `Halfband39.h` - 39-tap linear-phase halfband FIR for 48kHz ↔ 24kHz resampling
+- `hothouse.h` - Hothouse hardware abstraction layer
+- `Makefile` - Build configuration for ARM GCC toolchain
 
 ## Known Issues & Limitations
 
 - Preset changes have 500ms debounce to prevent parameter glitches
-- Extreme decay settings (>2x) may cause buildup on some presets
+- Decay range limited to 0.5x-1.0x to prevent feedback (authentic PSX = 100%)
 - No MIDI control (knobs only)
+- No preset save/recall (factory presets only)
 
 ## License
 
