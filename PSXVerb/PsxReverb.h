@@ -144,6 +144,16 @@ public:
         p_.vWALL_f = preset_base_.vWALL_f * wall_scale;
     }
 
+    // Runtime input gain control (0.0 to 1.0 range)
+    void SetInputGain(float gain) {
+        // Scale vLIN/vRIN (input volume)
+        // Range: 0x (gain=0) -> 2x (gain=1.0)
+        // 50% = 1x = unity/authentic
+        float gain_scale = gain * 2.0f;  // 0x to 2x
+        p_.vLIN_f = preset_base_.vLIN_f * gain_scale;
+        p_.vRIN_f = preset_base_.vRIN_f * gain_scale;
+    }
+
     // Runtime reverb output level control (0.0 to 1.0 range)
     void SetReverbLevel(float level) {
         // Scale vLOUT/vROUT (output volume)
