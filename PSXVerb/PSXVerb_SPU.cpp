@@ -40,6 +40,7 @@ struct ParamSmoother {
 };
 
 ParamSmoother smMix;
+ParamSmoother smGain;
 
 // Audio callback - ZERO LATENCY DRY PATH
 void AudioCallback(AudioHandle::InputBuffer in,
@@ -70,11 +71,12 @@ void AudioCallback(AudioHandle::InputBuffer in,
 
     reverb.ProcessBlock(in[0], in[1], wet_L, wet_R, size);
 
-    // Mix dry + wet
+    // Mix dry + wet, then apply overall gain
     float mix = smMix.value;
+    float gain = smGain.value;
     for (size_t i = 0; i < size; ++i) {
-        out[0][i] = dry_L[i] * (1.0f - mix) + wet_L[i] * mix;
-        out[1][i] = dry_R[i] * (1.0f - mix) + wet_R[i] * mix;
+        out[0][i] = (dry_L[i] * (1.0f - mix) + wet_L[i] * mix) * gain;
+        out[1][i] = (dry_R[i] * (1.0f - mix) + wet_R[i] * mix) * gain;
     }
 }
 
@@ -100,8 +102,9 @@ int main()
     led1.Init(hw.seed.GetPin(Hothouse::LED_1), true);
     led2.Init(hw.seed.GetPin(Hothouse::LED_2), true);
 
-    // Initialize mix smoother
+    // Initialize parameter smoothers
     smMix.Init(0.5f);
+    smGain.Init(1.0f);  // Default to unity gain
 
     // Enable flush-to-zero and denormals-are-zero
     #ifdef __ARM_ARCH
@@ -139,6 +142,11 @@ int main()
         // Knob 2: Input gain (0x to 2x, 50% = 1x unity)
         float input_gain = hw.GetKnobValue(Hothouse::KNOB_2);
         reverb.SetInputGain(input_gain);
+
+        // Knob 3: Overall output gain (0x to 2x, 50% = 1x unity)
+        // Only affects output when reverb is enabled, not in bypass
+        float gain_target = hw.GetKnobValue(Hothouse::KNOB_3);
+        smGain.Process(gain_target * 2.0f);  // 0x to 2x
 
         // Knob 4: Decay time (0.5x to 1.0x, 100% = authentic)
         float decay = hw.GetKnobValue(Hothouse::KNOB_4);
