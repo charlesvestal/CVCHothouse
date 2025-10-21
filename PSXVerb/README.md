@@ -120,10 +120,13 @@ make program-dfu
 
 ## References
 
-- [PSX-SPX: SPU Reverb Examples](https://psx-spx.consoledev.net/soundprocessingunitspu/#spu-reverb-examples)
-- [PSX-SPX: SPU Reverb Formula](https://problemkaputt.de/psx-spx.htm#spureverbformula)
-- [Reference Implementation: lv2-psx-reverb](https://github.com/ipatix/lv2-psx-reverb)
-- [jsgroth PSX SPU Blog](https://www.jsgroth.dev/posts/ps1-spu-part2/)
+### Primary Specifications
+- [PSX-SPX: SPU Reverb Examples](https://psx-spx.consoledev.net/soundprocessingunitspu/#spu-reverb-examples) - Martin Korth
+- [PSX-SPX: SPU Reverb Formula](https://problemkaputt.de/psx-spx.htm#spureverbformula) - Martin Korth
+
+### Additional Resources
+- [Reference Implementation: lv2-psx-reverb](https://github.com/ipatix/lv2-psx-reverb) - ipatix
+- [jsgroth PSX SPU Blog Series](https://www.jsgroth.dev/posts/ps1-spu-part2/) - In-depth technical analysis
 
 ## Files
 
