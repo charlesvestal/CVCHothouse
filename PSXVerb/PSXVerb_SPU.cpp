@@ -163,11 +163,11 @@ int main()
             bypass_ = !bypass_;
         }
 
-        // LED1: Bypass indicator (off when bypassed, on when active)
+        // LED1: Active indicator (on when reverb enabled, off when bypassed)
         led1.Set(bypass_ ? 0.0f : 1.0f);
 
-        // LED2: Mix level indicator
-        led2.Set(bypass_ ? 0.0f : smMix.value);
+        // LED2: Mix level indicator (brightness tracks K6)
+        led2.Set(smMix.value);
 
         // Update LED outputs
         led1.Update();
