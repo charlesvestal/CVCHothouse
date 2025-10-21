@@ -30,9 +30,16 @@ Built for **Hothouse** pedal platform (Daisy Seed based):
 - **K5**: Reverb Level (0x to 4x - **50% = unity/2x**, 100% = hot)
 - **K6**: Dry/Wet Mix (0% = dry, 100% = wet)
 
+### Toggle Switches
+- **Switch 1**: *(Unused)*
+- **Switch 2**: Buffer Clear Mode
+  - **Up/Middle**: Normal (tails continue when bypassed)
+  - **Down**: Clear buffer when entering bypass (prevents old reverb tail)
+- **Switch 3**: *(Unused)*
+
 ### Footswitch & LEDs
 - **Footswitch 1**: Bypass toggle (hold 1 second to enter DFU mode)
-- **LED1**: Active indicator (ON when reverb enabled, OFF when bypassed)
+- **LED1**: Active indicator (ON when reverb enabled, OFF when bypassed, flashes N times on preset change)
 - **LED2**: Mix level indicator (brightness tracks K6: OFF at 0%, BRIGHT at 100%)
 
 ## Technical Details
@@ -102,8 +109,8 @@ make program-dfu
 
 ## Memory Usage
 
-- **FLASH**: 81,072 bytes (61.85% of 128KB)
-- **SRAM**: 16,140 bytes (3.08% of 512KB)
+- **FLASH**: 83,936 bytes (64.04% of 128KB)
+- **SRAM**: 17,012 bytes (3.24% of 512KB)
 - **Work buffer**: Varies by preset (largest is Space Echo at ~62KB)
 - **Audio block size**: 4 samples (83μs latency at 48kHz)
 
@@ -121,12 +128,10 @@ make program-dfu
 ## References
 
 ### Primary Specifications
-- [PSX-SPX: SPU Reverb Examples](https://psx-spx.consoledev.net/soundprocessingunitspu/#spu-reverb-examples) - Martin Korth
-- [PSX-SPX: SPU Reverb Formula](https://problemkaputt.de/psx-spx.htm#spureverbformula) - Martin Korth
+- [PSX-SPX: SPU Reverb Examples](https://psx-spx.consoledev.net/soundprocessingunitspu/#spu-reverb-examples) 
+- [PSX-SPX: SPU Reverb Formula](https://problemkaputt.de/psx-spx.htm#spureverbformula) 
+- [jsgroth PSX SPU Blog Series](https://jsgroth.dev/blog/posts/ps1-spu-part-3/) - 
 
-### Additional Resources
-- [Reference Implementation: lv2-psx-reverb](https://github.com/ipatix/lv2-psx-reverb) - ipatix
-- [jsgroth PSX SPU Blog Series](https://www.jsgroth.dev/posts/ps1-spu-part2/) - In-depth technical analysis
 
 ## Files
 
@@ -149,11 +154,3 @@ make program-dfu
 
 This implementation is based on publicly documented PSX SPU behavior. See individual source files for license details.
 
-## Credits
-
-Implementation by Claude Code for Cleveland Music Co. Hothouse platform.
-
-Based on reverse-engineering work by:
-- Martin Korth (PSX-SPX documentation)
-- jsgroth (blog series on PSX SPU internals)
-- ipatix (lv2-psx-reverb reference implementation)

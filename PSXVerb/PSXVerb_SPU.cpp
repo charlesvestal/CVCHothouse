@@ -21,6 +21,8 @@ PsxReverb reverb;
 
 // State
 bool bypass_ = true;
+bool prev_bypass_ = true;  // Track bypass state changes
+bool clear_on_bypass_ = false;  // Switch 2: Clear buffer when bypassing
 int current_preset_ = 0;  // Start with Room
 float sample_rate_ = 48000.0f;
 
@@ -177,10 +179,20 @@ int main()
             }
         }
 
+        // Read toggle switches
+        // Switch 2 down = clear buffer on bypass
+        clear_on_bypass_ = (hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2) == Hothouse::TOGGLESWITCH_DOWN);
+
         // Footswitch: Bypass toggle
         if (hw.switches[Hothouse::FOOTSWITCH_1].RisingEdge()) {
             bypass_ = !bypass_;
         }
+
+        // If entering bypass and clear mode is enabled, reset reverb
+        if (bypass_ && !prev_bypass_ && clear_on_bypass_) {
+            reverb.Reset();
+        }
+        prev_bypass_ = bypass_;
 
         // LED1: Active indicator (on when reverb enabled, off when bypassed)
         // Note: LEDs are active_low, so invert the logic
