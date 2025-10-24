@@ -30,9 +30,10 @@ endif()
 # Create plugin target
 juce_add_plugin(TapeScamVST
     COMPANY_NAME "CVC Hothouse"
+    BUNDLE_ID com.vestal.TapeScam
     PLUGIN_MANUFACTURER_CODE CVCh
     PLUGIN_CODE TpSc
-    FORMATS VST3 AU Standalone
+    FORMATS VST3 AU AUv3 Standalone
     PRODUCT_NAME "TapeScam"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -42,6 +43,9 @@ juce_add_plugin(TapeScamVST
     COPY_PLUGIN_AFTER_BUILD TRUE
     VST3_CATEGORIES Fx Distortion
     AU_MAIN_TYPE kAudioUnitType_Effect
+    # iOS/AUv3 settings
+    IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+    IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
 )
 
 # Source files
