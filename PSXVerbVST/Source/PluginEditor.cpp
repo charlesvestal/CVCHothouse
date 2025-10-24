@@ -51,8 +51,12 @@ PSXVerbAudioProcessorEditor::PSXVerbAudioProcessorEditor (PSXVerbAudioProcessor&
     bypassAttachment.reset(new juce::AudioProcessorValueTreeState::ButtonAttachment(
         valueTreeState, "bypass", bypassButton));
 
-    // Set plugin window size
-    setSize (600, 400);
+    // Set plugin window size - larger for iOS touch targets
+    #if JUCE_IOS
+    setSize (800, 900);   // iOS: Taller layout for touch
+    #else
+    setSize (600, 400);   // Desktop: Compact layout
+    #endif
 }
 
 PSXVerbAudioProcessorEditor::~PSXVerbAudioProcessorEditor()
@@ -104,6 +108,42 @@ void PSXVerbAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
 
+    #if JUCE_IOS
+    // iOS Layout - vertical, larger touch targets
+
+    // Title area
+    area.removeFromTop(80);
+
+    // Preset selector - large touch area
+    auto presetArea = area.removeFromTop(80);
+    const int labelWidth = 120;
+    presetSelector.setBounds(labelWidth, presetArea.getY() + 10,
+                            getWidth() - labelWidth - 20, 60);
+
+    // Knobs in grid layout
+    const int padding = 20;
+    const int knobSize = 140;
+
+    // Row 1: Input Gain, Output Gain, Decay
+    auto row1 = area.removeFromTop(knobSize + 60);
+    int knobSpacing = (getWidth() - padding * 2) / 3;
+    inputGainKnob.setBounds(padding + knobSpacing * 0, row1.getY(), knobSize, knobSize);
+    outputGainKnob.setBounds(padding + knobSpacing * 1, row1.getY(), knobSize, knobSize);
+    decayKnob.setBounds(padding + knobSpacing * 2, row1.getY(), knobSize, knobSize);
+
+    // Row 2: Reverb Level, Mix (centered)
+    auto row2 = area.removeFromTop(knobSize + 60);
+    knobSpacing = (getWidth() - padding * 2) / 2;
+    reverbLevelKnob.setBounds(padding + knobSpacing * 0, row2.getY(), knobSize, knobSize);
+    mixKnob.setBounds(padding + knobSpacing * 1, row2.getY(), knobSize, knobSize);
+
+    // Bypass button at bottom - large touch target
+    auto buttonArea = area.removeFromBottom(100);
+    bypassButton.setBounds(getWidth() / 2 - 100, buttonArea.getY() + 20, 200, 60);
+
+    #else
+    // Desktop Layout - compact horizontal
+
     // Title area
     area.removeFromTop(60);
 
@@ -126,4 +166,6 @@ void PSXVerbAudioProcessorEditor::resized()
     // Bypass button at bottom
     auto buttonArea = area.removeFromBottom(70);
     bypassButton.setBounds(getWidth() / 2 - 60, buttonArea.getY() + 20, 120, 30);
+
+    #endif
 }

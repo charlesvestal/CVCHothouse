@@ -53,8 +53,12 @@ TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcess
     bypassAttachment.reset(new juce::AudioProcessorValueTreeState::ButtonAttachment(
         valueTreeState, "bypass", bypassButton));
 
-    // Set plugin window size (pedal-style proportions)
-    setSize (600, 400);
+    // Set plugin window size - larger for iOS touch targets
+    #if JUCE_IOS
+    setSize (800, 1000);  // iOS: Taller layout for touch
+    #else
+    setSize (600, 400);   // Desktop: Compact layout
+    #endif
 }
 
 TapeScamAudioProcessorEditor::~TapeScamAudioProcessorEditor()
@@ -122,6 +126,52 @@ void TapeScamAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
 
+    #if JUCE_IOS
+    // iOS Layout - vertical, larger touch targets
+
+    // Title area
+    area.removeFromTop(80);
+
+    // Knobs in grid layout (2 rows for better touch)
+    const int padding = 20;
+    const int knobSize = 140;  // Large enough for touch
+
+    // Row 1: Input, Drive, Saturation, Wow/Flutter
+    auto row1 = area.removeFromTop(knobSize + 60);
+    int knobSpacing = (getWidth() - padding * 2) / 4;
+    inputKnob.setBounds(padding + knobSpacing * 0, row1.getY(), knobSize, knobSize);
+    driveKnob.setBounds(padding + knobSpacing * 1, row1.getY(), knobSize, knobSize);
+    saturationKnob.setBounds(padding + knobSpacing * 2, row1.getY(), knobSize, knobSize);
+    wowFlutterKnob.setBounds(padding + knobSpacing * 3, row1.getY(), knobSize, knobSize);
+
+    // Row 2: Noise, Tone, Level
+    auto row2 = area.removeFromTop(knobSize + 60);
+    knobSpacing = (getWidth() - padding * 2) / 3;
+    noiseKnob.setBounds(padding + knobSpacing * 0, row2.getY(), knobSize, knobSize);
+    toneKnob.setBounds(padding + knobSpacing * 1, row2.getY(), knobSize, knobSize);
+    levelKnob.setBounds(padding + knobSpacing * 2, row2.getY(), knobSize, knobSize);
+
+    // Toggles section - larger touch areas
+    area.removeFromTop(30);
+    const int toggleHeight = 60;
+    const int labelWidth = 150;
+
+    tapeAgeToggle.setBounds(labelWidth, area.getY(), getWidth() - labelWidth - 20, toggleHeight);
+    area.removeFromTop(toggleHeight + 10);
+
+    tapeSpeedToggle.setBounds(labelWidth, area.getY(), getWidth() - labelWidth - 20, toggleHeight);
+    area.removeFromTop(toggleHeight + 10);
+
+    compressionToggle.setBounds(labelWidth, area.getY(), getWidth() - labelWidth - 20, toggleHeight);
+    area.removeFromTop(toggleHeight + 10);
+
+    // Bypass button at bottom - large touch target
+    auto buttonArea = area.removeFromBottom(100);
+    bypassButton.setBounds(getWidth() / 2 - 100, buttonArea.getY() + 20, 200, 60);
+
+    #else
+    // Desktop Layout - compact horizontal
+
     // Title area
     area.removeFromTop(60);
 
@@ -156,4 +206,6 @@ void TapeScamAudioProcessorEditor::resized()
     // Bypass button at bottom
     auto buttonArea = area.removeFromBottom(50);
     bypassButton.setBounds(getWidth() / 2 - 60, buttonArea.getY() + 10, 120, 30);
+
+    #endif
 }
