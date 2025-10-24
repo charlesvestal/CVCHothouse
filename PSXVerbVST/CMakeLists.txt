@@ -21,9 +21,10 @@ FetchContent_MakeAvailable(juce)
 # Define plugin
 juce_add_plugin(PSXVerbVST
     COMPANY_NAME "CVC Hothouse"
+    BUNDLE_ID com.vestal.PSXVerb
     PLUGIN_MANUFACTURER_CODE CVch
     PLUGIN_CODE Pxvb
-    FORMATS VST3 AU Standalone
+    FORMATS VST3 AU AUv3 Standalone
     PRODUCT_NAME "PSXVerb"
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -32,6 +33,9 @@ juce_add_plugin(PSXVerbVST
     COPY_PLUGIN_AFTER_BUILD TRUE
     VST3_CATEGORIES "Fx" "Reverb"
     AU_MAIN_TYPE kAudioUnitType_Effect
+    # iOS/AUv3 settings
+    IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+    IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
 )
 
 # Source files
