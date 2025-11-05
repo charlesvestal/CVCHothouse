@@ -58,27 +58,31 @@ void AudioCallback(AudioHandle::InputBuffer in,
         dry_R[i] = in[1][i];
     }
 
-    if (bypass_) {
-        // Pure bypass - just output dry
-        for (size_t i = 0; i < size; ++i) {
-            out[0][i] = dry_L[i];
-            out[1][i] = dry_R[i];
-        }
-        return;
-    }
-
-    // Process reverb
+    // Process reverb (always, to let tails decay naturally)
     float wet_L[kBlockSize];
     float wet_R[kBlockSize];
 
-    reverb.ProcessBlock(in[0], in[1], wet_L, wet_R, size);
+    if (bypass_) {
+        // Feed silence to reverb (lets tail decay, no new input)
+        float silence[kBlockSize] = {0.0f};
+        reverb.ProcessBlock(silence, silence, wet_L, wet_R, size);
 
-    // Mix dry + wet, then apply overall gain
-    float mix = smMix.value;
-    float gain = smGain.value;
-    for (size_t i = 0; i < size; ++i) {
-        out[0][i] = (dry_L[i] * (1.0f - mix) + wet_L[i] * mix) * gain;
-        out[1][i] = (dry_R[i] * (1.0f - mix) + wet_R[i] * mix) * gain;
+        // Output dry + decaying tail
+        for (size_t i = 0; i < size; ++i) {
+            out[0][i] = dry_L[i] + wet_L[i];
+            out[1][i] = dry_R[i] + wet_R[i];
+        }
+    } else {
+        // Normal operation: process input through reverb
+        reverb.ProcessBlock(in[0], in[1], wet_L, wet_R, size);
+
+        // Mix dry + wet, then apply overall gain
+        float mix = smMix.value;
+        float gain = smGain.value;
+        for (size_t i = 0; i < size; ++i) {
+            out[0][i] = (dry_L[i] * (1.0f - mix) + wet_L[i] * mix) * gain;
+            out[1][i] = (dry_R[i] * (1.0f - mix) + wet_R[i] * mix) * gain;
+        }
     }
 }
 

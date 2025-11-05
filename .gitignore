@@ -1,5 +1,6 @@
 # Daisy build artifacts
 **/build/
+**/build_ios/
 **/*.elf
 **/*.bin
 **/*.hex
