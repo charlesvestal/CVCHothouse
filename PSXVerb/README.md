@@ -12,7 +12,7 @@ A faithful recreation of the PlayStation 1 SPU reverb algorithm for the Daisy Se
 - **6 classic presets** - Room, Studio Small/Medium/Large, Hall, Space Echo
 - **Halfband resampling** - 48kHz ↔ 24kHz using 39-tap FIR filters (scaled from PSX's 22.05kHz)
 - **16-bit saturating work area** - Faithful SPU RAM emulation with circular buffer
-- **Zero-latency dry path** - Dry signal passes through untouched
+- **Sub-1ms dry path** - Dry signal passes through untouched
 - **Real-time parameter control** - 6 knobs for comprehensive sound shaping
 - **Efficient implementation** - 61.58% FLASH, 3.08% SRAM
 
