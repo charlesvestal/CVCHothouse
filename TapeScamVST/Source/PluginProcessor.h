@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <foleys_gui_magic/foleys_gui_magic.h>
 #include "../DSP/GainStageModule.h"
 #include "../DSP/TapeSatModule.h"
 #include "../DSP/WowFlutterModule.h"
@@ -80,10 +81,14 @@ public:
     int getCompression() const { return static_cast<int>(*compressionParam); }
     bool getBypassed() const { return *bypassParam > 0.5f; }
 
+    foleys::MagicProcessorState& getMagicState() noexcept { return magicState; }
+    const foleys::MagicProcessorState& getMagicState() const noexcept { return magicState; }
+
 private:
     //==============================================================================
     // Audio Parameter Tree
     juce::AudioProcessorValueTreeState parameters;
+    foleys::MagicProcessorState magicState;
 
     // Parameter pointers (for fast access)
     std::atomic<float>* inputParam = nullptr;

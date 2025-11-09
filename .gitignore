@@ -5,3 +5,4 @@
 **/*.bin
 **/*.hex
 .DS_Store
+/TapeScamVST/Builds

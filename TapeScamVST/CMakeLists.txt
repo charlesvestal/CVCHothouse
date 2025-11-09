@@ -19,6 +19,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+FetchContent_Declare(
+    FoleySGuiMagic
+    GIT_REPOSITORY https://github.com/ffAudio/foleys_gui_magic.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(FoleySGuiMagic)
+
 # Suppress deprecation warnings for macOS 15 SDK
 if(APPLE)
     add_compile_options(-Wno-deprecated-declarations)
@@ -53,6 +60,9 @@ target_sources(TapeScamVST
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
+        Source/ui/GuiFactories.cpp
+        Source/ui/MagicKnobWithOverlay.cpp
+        Source/ui/MagicThreeWaySwitch.cpp
         DSP/GainStageModule.cpp
         DSP/TapeSatModule.cpp
         DSP/WowFlutterModule.cpp
@@ -61,12 +71,21 @@ target_sources(TapeScamVST
         DSP/LoFiCompressor.cpp
 )
 
+file(GLOB TAPESCAM_GUI_IMAGES CONFIGURE_DEPENDS Resources/Images/*)
+
+juce_add_binary_data(TapeScamGUIAssets
+    SOURCES
+        Resources/Magic/TapeScam.magic
+        ${TAPESCAM_GUI_IMAGES}
+)
+
 # Compile definitions
 target_compile_definitions(TapeScamVST
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
+        FOLEYS_ENABLE_BINARY_DATA=1
 )
 
 # Link JUCE modules
@@ -74,6 +93,8 @@ target_link_libraries(TapeScamVST
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
+        foleys_gui_magic
+        TapeScamGUIAssets
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "BinaryData.h"
 
 //==============================================================================
 TapeScamAudioProcessor::TapeScamAudioProcessor()
@@ -13,7 +14,8 @@ TapeScamAudioProcessor::TapeScamAudioProcessor()
                      #endif
                        ),
 #endif
-    parameters(*this, nullptr, juce::Identifier("TapeScam"), createParameterLayout())
+    parameters(*this, nullptr, juce::Identifier("TapeScam"), createParameterLayout()),
+    magicState(*this)
 {
     // Attach parameter pointers for fast access
     inputParam = parameters.getRawParameterValue("input");
@@ -27,6 +29,16 @@ TapeScamAudioProcessor::TapeScamAudioProcessor()
     tapeSpeedParam = parameters.getRawParameterValue("tapeSpeed");
     compressionParam = parameters.getRawParameterValue("compression");
     bypassParam = parameters.getRawParameterValue("bypass");
+
+    magicState.setGuiValueTree (BinaryData::TapeScam_magic, BinaryData::TapeScam_magicSize);
+    magicState.updateParameterMap();
+
+   #if FOLEYS_SHOW_GUI_EDITOR_PALLETTE
+    const auto sourceDir   = juce::File (__FILE__).getParentDirectory();
+    const auto projectRoot = sourceDir.getParentDirectory();
+    const auto resourcesDir = projectRoot.getParentDirectory().getChildFile ("Resources/Magic");
+    magicState.setResourcesFolder (resourcesDir.getFullPathName());
+   #endif
 }
 
 TapeScamAudioProcessor::~TapeScamAudioProcessor()
@@ -153,6 +165,8 @@ void TapeScamAudioProcessor::changeProgramName (int index, const juce::String& n
 void TapeScamAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = static_cast<float>(sampleRate);
+
+    magicState.prepareToPlay (sampleRate, samplesPerBlock);
 
     // Initialize all DSP modules with sample rate (matching firmware)
     gainStage.Init(currentSampleRate);
@@ -397,7 +411,7 @@ bool TapeScamAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* TapeScamAudioProcessor::createEditor()
 {
-    return new TapeScamAudioProcessorEditor (*this, parameters);
+    return new TapeScamAudioProcessorEditor (*this);
 }
 
 //==============================================================================

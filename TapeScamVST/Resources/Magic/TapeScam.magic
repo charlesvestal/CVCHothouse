@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<magic width="1680" height="1220" resizable="0">
+  <Styles>
+    <Style name="default">
+      <Nodes />
+      <Classes>
+        <root margin="0" padding="0" />
+        <transparent background-color="#00000000" />
+      </Classes>
+      <Types>
+        <Label text-color="FFFFFF" font-size="28" justification="centred" background-color="#00000000" />
+      </Types>
+      <Palettes>
+        <default />
+      </Palettes>
+    </Style>
+  </Styles>
+  <View id="root" styleClass="root transparent" background-image="panel_background_png" pos-width="1680" pos-height="1220" pos-x="0" pos-y="0" flex-align-self="stretch" display="contents" resizable="1" resize-corner="1">
+    <TapeKnob parameter="drive" base-image="knob1.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="323" pos-y="275" flex-align-self="center" background-color="00000000" />
+    <TapeKnob parameter="saturation" base-image="knob2.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="706" pos-y="275" background-color="00000000" />
+    <TapeKnob parameter="wowFlutter" base-image="knob3.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="1090" pos-y="275" background-color="00000000" />
+    <TapeKnob parameter="noise" base-image="knob4.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="323" pos-y="633" background-color="00000000" />
+    <TapeKnob parameter="tone" base-image="knob5.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="706" pos-y="633" background-color="00000000" />
+    <TapeKnob parameter="level" base-image="knob6.png" min-angle="-135" max-angle="135" pos-width="242" pos-height="249" pos-x="1090" pos-y="630" background-color="00000000" />
+    <TapeSwitch parameter="tapeAge" pos-width="420" pos-height="120" pos-x="140" pos-y="1040" handle-image="knob1.png" />
+    <TapeSwitch parameter="tapeSpeed" handle-image="switch_handle.png" pos-width="420" pos-height="120" pos-x="630" pos-y="1040" />
+    <TapeSwitch parameter="compression" handle-image="switch_handle.png" pos-width="420" pos-height="120" pos-x="1120" pos-y="1040" />
+  </View>
+</magic>
