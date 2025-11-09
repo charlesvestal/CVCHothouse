@@ -9,15 +9,11 @@ constexpr int kDefaultWidth  = 1680;
 constexpr int kDefaultHeight = 1220;
 }
 
-TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcessor& p)
-    : foleys::MagicPluginEditor (p.getMagicState()),
+TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcessor& p,
+                                                            std::unique_ptr<foleys::MagicGUIBuilder> builder)
+    : foleys::MagicPluginEditor (p.getMagicState(), std::move (builder)),
       audioProcessor (p)
 {
-    auto& builder = getGUIBuilder();
-    builder.registerJUCEFactories();
-    builder.registerJUCELookAndFeels();
-    tape::registerTapeScamFactories (builder);
-
     initialiseGUI();
 }
 

@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <foleys_gui_magic/foleys_gui_magic.h>
+#include <memory>
 
 #include "PluginProcessor.h"
 #include "ui/GuiFactories.h"
@@ -9,7 +10,7 @@
 class TapeScamAudioProcessorEditor  : public foleys::MagicPluginEditor
 {
 public:
-    explicit TapeScamAudioProcessorEditor (TapeScamAudioProcessor&);
+    TapeScamAudioProcessorEditor (TapeScamAudioProcessor&, std::unique_ptr<foleys::MagicGUIBuilder> builder);
     ~TapeScamAudioProcessorEditor() override = default;
 
     void resized() override;

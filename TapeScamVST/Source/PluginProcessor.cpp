@@ -411,7 +411,12 @@ bool TapeScamAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* TapeScamAudioProcessor::createEditor()
 {
-    return new TapeScamAudioProcessorEditor (*this);
+    auto builder = std::make_unique<foleys::MagicGUIBuilder> (magicState);
+    builder->registerJUCEFactories();
+    builder->registerJUCELookAndFeels();
+    tape::registerTapeScamFactories (*builder);
+
+    return new TapeScamAudioProcessorEditor (*this, std::move (builder));
 }
 
 //==============================================================================
