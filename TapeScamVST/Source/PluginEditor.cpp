@@ -35,10 +35,17 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     constexpr int halfHeight = kDefaultHeight / 2;
 
     setSize (halfWidth, halfHeight);
+
+   #if JUCE_IOS
+    // Allow the standalone container to use the full device bounds so we can letterbox via applyDesignTransform
+    setResizeLimits (halfWidth, halfHeight, 8192, 8192);
+    setResizable (true, true);
+   #else
     setResizeLimits (halfWidth, halfHeight, kDefaultWidth, kDefaultHeight);
     setResizable (true, true);
     if (auto* constrainer = getConstrainer())
         constrainer->setFixedAspectRatio (static_cast<double> (kDefaultWidth) / static_cast<double> (kDefaultHeight));
+   #endif
     magicState.setLastEditorSize (halfWidth, halfHeight);
     setConfigTree (magicState.getGuiTree());
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TapeScamAudioProcessorEditor>(this)]
