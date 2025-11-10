@@ -7,12 +7,6 @@ namespace
 {
 constexpr int kDefaultWidth  = 1204;
 constexpr int kDefaultHeight = 1157;
-
-#if JUCE_IOS && defined (JucePlugin_Build_Standalone) && JucePlugin_Build_Standalone
-constexpr bool kIsIOSStandaloneTarget = true;
-#else
-constexpr bool kIsIOSStandaloneTarget = false;
-#endif
 }
 
 TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcessor& p,
@@ -40,7 +34,12 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     constexpr int halfWidth  = kDefaultWidth / 2;
     constexpr int halfHeight = kDefaultHeight / 2;
 
-    const bool iosStandalone = kIsIOSStandaloneTarget;
+   #if JUCE_IOS
+    const bool iosStandalone = isIOSStandaloneHost();
+   #else
+    constexpr bool iosStandalone = false;
+   #endif
+
     const int initialWidth = iosStandalone ? kDefaultWidth : halfWidth;
     const int initialHeight = iosStandalone ? kDefaultHeight : halfHeight;
 
@@ -83,8 +82,8 @@ void TapeScamAudioProcessorEditor::resized()
 
 void TapeScamAudioProcessorEditor::applyDesignTransform()
 {
-   #if JUCE_IOS
-    if (kIsIOSStandaloneTarget)
+#if JUCE_IOS
+    if (isIOSStandaloneHost())
     {
         if (auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
         {
@@ -120,4 +119,13 @@ void TapeScamAudioProcessorEditor::applyDesignTransform()
         rootItem->setTransform (juce::AffineTransform::scale (scale)
                                                       .translated (offsetX, offsetY));
     }
+}
+
+bool TapeScamAudioProcessorEditor::isIOSStandaloneHost() const noexcept
+{
+#if JUCE_IOS
+    return audioProcessor.wrapperType == juce::AudioProcessor::wrapperType_Standalone;
+#else
+    return false;
+#endif
 }
