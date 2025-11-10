@@ -7,6 +7,12 @@ namespace
 {
 constexpr int kDefaultWidth  = 1204;
 constexpr int kDefaultHeight = 1157;
+
+#if JUCE_IOS && defined (JucePlugin_Build_Standalone) && JucePlugin_Build_Standalone
+constexpr bool kIsIOSStandaloneTarget = true;
+#else
+constexpr bool kIsIOSStandaloneTarget = false;
+#endif
 }
 
 TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcessor& p,
@@ -34,25 +40,32 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     constexpr int halfWidth  = kDefaultWidth / 2;
     constexpr int halfHeight = kDefaultHeight / 2;
 
-   #if JUCE_IOS
-    const int initialWidth = kDefaultWidth;
-    const int initialHeight = kDefaultHeight;
-   #else
-    const int initialWidth = halfWidth;
-    const int initialHeight = halfHeight;
-   #endif
+    const bool iosStandalone = kIsIOSStandaloneTarget;
+    const int initialWidth = iosStandalone ? kDefaultWidth : halfWidth;
+    const int initialHeight = iosStandalone ? kDefaultHeight : halfHeight;
 
     setSize (initialWidth, initialHeight);
 
    #if JUCE_IOS
-    setResizeLimits (initialWidth, initialHeight, 8192, 8192);
-    setResizable (true, true);
+    if (iosStandalone)
+    {
+        setResizeLimits (initialWidth, initialHeight, 8192, 8192);
+        setResizable (true, true);
+    }
+    else
+    {
+        setResizeLimits (halfWidth, halfHeight, kDefaultWidth, kDefaultHeight);
+        setResizable (true, true);
+        if (auto* constrainer = getConstrainer())
+            constrainer->setFixedAspectRatio (static_cast<double> (kDefaultWidth) / static_cast<double> (kDefaultHeight));
+    }
    #else
     setResizeLimits (halfWidth, halfHeight, kDefaultWidth, kDefaultHeight);
     setResizable (true, true);
     if (auto* constrainer = getConstrainer())
         constrainer->setFixedAspectRatio (static_cast<double> (kDefaultWidth) / static_cast<double> (kDefaultHeight));
    #endif
+
     magicState.setLastEditorSize (initialWidth, initialHeight);
     setConfigTree (magicState.getGuiTree());
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TapeScamAudioProcessorEditor>(this)]
@@ -71,15 +84,16 @@ void TapeScamAudioProcessorEditor::resized()
 void TapeScamAudioProcessorEditor::applyDesignTransform()
 {
    #if JUCE_IOS
-    if (auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
+    if (kIsIOSStandaloneTarget)
     {
-        const auto displayArea = display->userArea;
-        if (displayArea.getWidth() > 0 && displayArea.getHeight() > 0)
+        if (auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
         {
-            if (getWidth() != displayArea.getWidth() || getHeight() != displayArea.getHeight())
+            const auto displayArea = display->userArea;
+            if (displayArea.getWidth() > 0 && displayArea.getHeight() > 0
+                && (getWidth() != displayArea.getWidth() || getHeight() != displayArea.getHeight()))
             {
                 setSize (displayArea.getWidth(), displayArea.getHeight());
-                return; // resized() will be called again with the new size
+                return; // resized() will re-run layout with updated bounds
             }
         }
     }
