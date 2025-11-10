@@ -6,6 +6,18 @@ project(TapeScamVST VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET 15.0 CACHE STRING "" FORCE)
+    # Ensure libraries can be found during Xcode archiving
+    set(CMAKE_XCODE_ATTRIBUTE_DEPLOYMENT_LOCATION NO)
+    set(CMAKE_XCODE_ATTRIBUTE_SKIP_INSTALL YES)
+    # Tell Xcode to use the built products directory for finding libraries
+    set(CMAKE_XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "\$(BUILD_DIR)/\$(CONFIGURATION)\$(EFFECTIVE_PLATFORM_NAME)")
+    # Set development team for code signing
+    set(CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "CYVQ7NZ3K6")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic")
+endif()
+
 # Add JUCE subdirectory (adjust path to where you have JUCE installed)
 # Option 1: If JUCE is in a sibling directory
 # add_subdirectory(../../JUCE JUCE)
@@ -24,6 +36,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/ffAudio/foleys_gui_magic.git
     GIT_TAG main
 )
+set(FOLEYS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FOLEYS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(FoleySGuiMagic)
 
 # Suppress deprecation warnings for macOS 15 SDK
@@ -42,6 +56,10 @@ juce_add_plugin(TapeScamVST
     PLUGIN_CODE TpSc
     FORMATS VST3 AU AUv3 Standalone
     PRODUCT_NAME "TapeScam"
+    ICON_BIG ${CMAKE_CURRENT_SOURCE_DIR}/Resources/Images/Icon.png
+    ICON_SMALL ${CMAKE_CURRENT_SOURCE_DIR}/Resources/Images/Icon.png
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "TapeScam needs microphone access to capture and process your audio."
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -53,6 +71,7 @@ juce_add_plugin(TapeScamVST
     # iOS/AUv3 settings
     IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
     IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
+    IS_IOS_APP_EXTENSION FALSE
 )
 
 # Source files
@@ -79,6 +98,23 @@ juce_add_binary_data(TapeScamGUIAssets
         ${TAPESCAM_GUI_IMAGES}
 )
 
+add_custom_command(TARGET TapeScamVST POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E env CONFIG=$<CONFIG>
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy_static.sh"
+            "$<TARGET_FILE:TapeScamVST>"
+            "${CMAKE_CURRENT_BINARY_DIR}/TapeScamVST_artefacts"
+)
+
+add_custom_command(TARGET TapeScamGUIAssets POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E env CONFIG=$<CONFIG>
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy_static.sh"
+            "$<TARGET_FILE:TapeScamGUIAssets>"
+            "${CMAKE_CURRENT_BINARY_DIR}/TapeScamVST_artefacts"
+    COMMENT "Copying TapeScamGUIAssets to artefacts directory"
+)
+
+# Removed PRE_LINK commands - they were adding incorrect library paths to the linker
+
 # Compile definitions
 target_compile_definitions(TapeScamVST
     PUBLIC
@@ -100,6 +136,25 @@ target_link_libraries(TapeScamVST
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+# For iOS archiving: Don't override CONFIGURATION_BUILD_DIR - let Xcode use default
+# Just add library search path to find libraries in BUILT_PRODUCTS_DIR
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set_target_properties(TapeScamVST_AUv3 PROPERTIES
+        XCODE_ATTRIBUTE_LIBRARY_SEARCH_PATHS "\$(inherited) \$(BUILT_PRODUCTS_DIR)"
+    )
+    set_target_properties(TapeScamVST_Standalone PROPERTIES
+        XCODE_ATTRIBUTE_LIBRARY_SEARCH_PATHS "\$(inherited) \$(BUILT_PRODUCTS_DIR)"
+    )
+
+    # Add post-build script to fix embedded AUv3 during archive
+    # This copies the correctly built appex over the symlink placeholder
+    add_custom_command(TARGET TapeScamVST_Standalone POST_BUILD
+        COMMAND bash -c "if [ -d \"\$(BUILT_PRODUCTS_DIR)/TapeScam.appex\" ]; then rm -rf \"\$(TARGET_BUILD_DIR)/TapeScam.app/PlugIns/TapeScam.appex\" && cp -R \"\$(BUILT_PRODUCTS_DIR)/TapeScam.appex\" \"\$(TARGET_BUILD_DIR)/TapeScam.app/PlugIns/\"; echo 'Fixed embedded AUv3 plugin'; fi"
+        COMMENT "Fixing embedded AUv3 plugin for iOS archive"
+        VERBATIM
+    )
+endif()
 
 # Include directories
 target_include_directories(TapeScamVST

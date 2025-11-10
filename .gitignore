@@ -6,3 +6,5 @@
 **/*.hex
 .DS_Store
 /TapeScamVST/Builds
+/TapeScamVST/build_ios_sim
+/TapeScamVST/build_prev

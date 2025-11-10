@@ -74,7 +74,9 @@ MagicThreeWaySwitch::SwitchComponent::HiddenSlider::HiddenSlider()
 
 MagicThreeWaySwitch::SwitchComponent::SwitchComponent()
 {
+    setOpaque (false);
     addAndMakeVisible (slider);
+    slider.setOpaque (false);
     slider.onValueChange = [this]
     {
         repaint();
@@ -91,11 +93,6 @@ void MagicThreeWaySwitch::SwitchComponent::paint (juce::Graphics& g)
         g.drawImageWithin (trackImage, static_cast<int> (trackBounds.getX()), static_cast<int> (trackBounds.getY()),
                            static_cast<int> (trackBounds.getWidth()), static_cast<int> (trackBounds.getHeight()),
                            juce::RectanglePlacement::stretchToFit, false);
-    }
-    else
-    {
-        g.setColour (juce::Colours::darkgrey.withAlpha (0.9f));
-        g.fillRoundedRectangle (trackBounds, trackBounds.getHeight() * 0.25f);
     }
 
     const float currentValue = static_cast<float> (slider.getValue());
@@ -126,12 +123,7 @@ void MagicThreeWaySwitch::SwitchComponent::paint (juce::Graphics& g)
     {
         g.drawImageWithin (handleImage, static_cast<int> (handleBounds.getX()), static_cast<int> (handleBounds.getY()),
                            static_cast<int> (handleBounds.getWidth()), static_cast<int> (handleBounds.getHeight()),
-                           juce::RectanglePlacement::stretchToFit, true);
-    }
-    else
-    {
-        g.setColour (juce::Colours::white.withAlpha (0.9f));
-        g.fillRoundedRectangle (handleBounds, handleBounds.getHeight() * 0.25f);
+                           juce::RectanglePlacement::stretchToFit, false);
     }
 }
 

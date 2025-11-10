@@ -5,8 +5,8 @@
 
 namespace
 {
-constexpr int kDefaultWidth  = 1680;
-constexpr int kDefaultHeight = 1220;
+constexpr int kDefaultWidth  = 1204;
+constexpr int kDefaultHeight = 1157;
 }
 
 TapeScamAudioProcessorEditor::TapeScamAudioProcessorEditor (TapeScamAudioProcessor& p,
