@@ -67,8 +67,36 @@ void TapeScamAudioProcessorEditor::applyDesignTransform()
     if (auto* rootItem = builder.findGuiItemWithId ("root"))
     {
         const auto available = getLocalBounds().toFloat();
-        const float scale = std::min (available.getWidth() / static_cast<float> (kDefaultWidth),
-                                      available.getHeight() / static_cast<float> (kDefaultHeight));
+        const auto widthRatio = available.getWidth() / static_cast<float> (kDefaultWidth);
+        const auto heightRatio = available.getHeight() / static_cast<float> (kDefaultHeight);
+
+        float scale = std::min (widthRatio, heightRatio);
+
+       #if JUCE_IOS
+        if (auto* peer = getPeer())
+        {
+            const auto peerBounds = peer->getBounds().toFloat();
+            const auto peerHeightScale = available.getHeight() > 0.0f
+                                             ? peerBounds.getHeight() / available.getHeight()
+                                             : 1.0f;
+
+            if (peerHeightScale > 0.0f)
+            {
+                const float desiredScale = peerBounds.getHeight() / static_cast<float> (kDefaultHeight);
+                scale = desiredScale / peerHeightScale;
+            }
+            else
+            {
+                scale = juce::jmax (heightRatio, 0.0f);
+            }
+        }
+        else
+        {
+            scale = juce::jmax (heightRatio, 0.0f);
+        }
+
+        scale = juce::jmax (scale, 0.0f);
+       #endif
 
         const float scaledWidth = static_cast<float> (kDefaultWidth) * scale;
         const float scaledHeight = static_cast<float> (kDefaultHeight) * scale;
