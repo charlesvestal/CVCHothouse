@@ -70,6 +70,21 @@ void TapeScamAudioProcessorEditor::resized()
 
 void TapeScamAudioProcessorEditor::applyDesignTransform()
 {
+   #if JUCE_IOS
+    if (auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
+    {
+        const auto displayArea = display->userArea;
+        if (displayArea.getWidth() > 0 && displayArea.getHeight() > 0)
+        {
+            if (getWidth() != displayArea.getWidth() || getHeight() != displayArea.getHeight())
+            {
+                setSize (displayArea.getWidth(), displayArea.getHeight());
+                return; // resized() will be called again with the new size
+            }
+        }
+    }
+   #endif
+
     auto& builder = getGUIBuilder();
     if (auto* rootItem = builder.findGuiItemWithId ("root"))
     {
