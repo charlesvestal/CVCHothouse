@@ -154,6 +154,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
         COMMENT "Fixing embedded AUv3 plugin for iOS archive"
         VERBATIM
     )
+
+    add_custom_command(TARGET TapeScamVST_AUv3 POST_BUILD
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/set_auv3_icon.sh"
+                "$<TARGET_FILE_DIR:TapeScamVST_AUv3>/Info.plist"
+        COMMENT "Syncing AUv3 NSExtensionIcon with primary AppIcon"
+        VERBATIM
+    )
 endif()
 
 # Include directories
