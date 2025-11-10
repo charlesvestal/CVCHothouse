@@ -34,11 +34,18 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     constexpr int halfWidth  = kDefaultWidth / 2;
     constexpr int halfHeight = kDefaultHeight / 2;
 
-    setSize (halfWidth, halfHeight);
+   #if JUCE_IOS
+    const int initialWidth = kDefaultWidth;
+    const int initialHeight = kDefaultHeight;
+   #else
+    const int initialWidth = halfWidth;
+    const int initialHeight = halfHeight;
+   #endif
+
+    setSize (initialWidth, initialHeight);
 
    #if JUCE_IOS
-    // Allow the standalone container to use the full device bounds so we can letterbox via applyDesignTransform
-    setResizeLimits (halfWidth, halfHeight, 8192, 8192);
+    setResizeLimits (initialWidth, initialHeight, 8192, 8192);
     setResizable (true, true);
    #else
     setResizeLimits (halfWidth, halfHeight, kDefaultWidth, kDefaultHeight);
@@ -46,7 +53,7 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     if (auto* constrainer = getConstrainer())
         constrainer->setFixedAspectRatio (static_cast<double> (kDefaultWidth) / static_cast<double> (kDefaultHeight));
    #endif
-    magicState.setLastEditorSize (halfWidth, halfHeight);
+    magicState.setLastEditorSize (initialWidth, initialHeight);
     setConfigTree (magicState.getGuiTree());
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TapeScamAudioProcessorEditor>(this)]
     {
@@ -70,33 +77,7 @@ void TapeScamAudioProcessorEditor::applyDesignTransform()
         const auto widthRatio = available.getWidth() / static_cast<float> (kDefaultWidth);
         const auto heightRatio = available.getHeight() / static_cast<float> (kDefaultHeight);
 
-        float scale = std::min (widthRatio, heightRatio);
-
-       #if JUCE_IOS
-        if (auto* peer = getPeer())
-        {
-            const auto peerBounds = peer->getBounds().toFloat();
-            const auto peerHeightScale = available.getHeight() > 0.0f
-                                             ? peerBounds.getHeight() / available.getHeight()
-                                             : 1.0f;
-
-            if (peerHeightScale > 0.0f)
-            {
-                const float desiredScale = peerBounds.getHeight() / static_cast<float> (kDefaultHeight);
-                scale = desiredScale / peerHeightScale;
-            }
-            else
-            {
-                scale = juce::jmax (heightRatio, 0.0f);
-            }
-        }
-        else
-        {
-            scale = juce::jmax (heightRatio, 0.0f);
-        }
-
-        scale = juce::jmax (scale, 0.0f);
-       #endif
+        const float scale = std::max (0.0f, std::min (widthRatio, heightRatio));
 
         const float scaledWidth = static_cast<float> (kDefaultWidth) * scale;
         const float scaledHeight = static_cast<float> (kDefaultHeight) * scale;
