@@ -46,14 +46,14 @@ void TapeScamAudioProcessorEditor::initialiseGUI()
     setSize (initialWidth, initialHeight);
 
    #if JUCE_IOS
-    if (iosStandalone)
-    {
+   if (iosStandalone)
+   {
         setResizeLimits (initialWidth, initialHeight, 8192, 8192);
         setResizable (true, true);
     }
     else
     {
-        setResizeLimits (halfWidth, halfHeight, kDefaultWidth, kDefaultHeight);
+        setResizeLimits (1, 1, kDefaultWidth, kDefaultHeight);
         setResizable (true, true);
         if (auto* constrainer = getConstrainer())
             constrainer->setFixedAspectRatio (static_cast<double> (kDefaultWidth) / static_cast<double> (kDefaultHeight));
