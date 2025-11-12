@@ -33,6 +33,7 @@ target_sources(TapeScam PRIVATE
 )
 target_include_directories(TapeScam PRIVATE
   ${TAPESCAM_SHARED_DSP_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
   "${DAISYSP_SOURCE_DIR}/Source"
   "${DAISYSP_SOURCE_DIR}/Source/Utility"
   "${DAISYSP_LGPL_DIR}"
