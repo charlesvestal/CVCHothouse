@@ -98,16 +98,22 @@ The toggle switches provide broad sonic territories, while the knobs let you dia
 
 ## Building
 
-```bash
-make clean
-make
-make program-dfu  # Flash to Daisy Seed
-```
+1. Install the Electro-Smith Daisy toolchain (https://daisy.audio/tutorials/toolchain-mac/) so `arm-none-eabi-gcc` is available (the default installer places it in `/Library/DaisyToolchain/0.2.0/bin`).
+2. From the `TapeScam` directory configure with the bundled preset:
+
+   ```bash
+   cmake --preset daisy-release
+   cmake --build --preset daisy-release
+   ```
+
+   The preset uses `extern/libDaisy/cmake/toolchains/ArmGNUToolchain.cmake` and assumes the compiler lives at `/Library/DaisyToolchain/0.2.0/bin/arm-none-eabi-gcc`. If yours is in a different location, edit `TapeScam/CMakePresets.json` or set `CMAKE_C_COMPILER` before configuring.
+
+3. Flash the resulting binary (found under `build/daisy-release/`) with your preferred DFU utility, e.g. `make program-dfu` or `dfu-util`.
 
 ## Dependencies
-- libDaisy
-- DaisySP (LGPL modules enabled)
-- Hothouse hardware abstraction layer
+- libDaisy (git submodule; run `git submodule update --init --recursive`)
+- DaisySP (fetched automatically by CMake)
+- Hothouse hardware abstraction layer (`hothouse.cpp/.h` in repo root)
 
 ## Credits
 

@@ -36,8 +36,11 @@ target_include_directories(TapeScam PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
   ${TAPESCAM_SHARED_DSP_DIR}
   ${LIBDAISY_DIR}/src
+  ${LIBDAISY_DIR}/src/sys
   ${LIBDAISY_DIR}/Drivers/CMSIS/DSP/Include
   ${LIBDAISY_DIR}/Drivers/CMSIS/Include
+  ${LIBDAISY_DIR}/Drivers/CMSIS-Device/ST/STM32H7xx/Include
+  ${LIBDAISY_DIR}/Drivers/CMSIS_5/CMSIS/Core/Include
   ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc
   ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
   ${LIBDAISY_DIR}/Core/Inc
@@ -46,3 +49,8 @@ target_include_directories(TapeScam PRIVATE
   "${DAISYSP_LGPL_DIR}"
 )
 target_link_libraries(TapeScam PRIVATE DaisySP)
+
+target_compile_definitions(TapeScam PRIVATE
+  STM32H750xx
+  USE_HAL_DRIVER
+)
