@@ -17,7 +17,8 @@
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../extern/libDaisy/cmake/toolchains/ArmGNUToolchain.cmake"
       },
       "environment": {
-        "CMAKE_C_COMPILER": "/Library/DaisyToolchain/0.2.0/bin/arm-none-eabi-gcc"
+        "CMAKE_C_COMPILER": "/usr/local/bin/arm-none-eabi-gcc",
+        "CMAKE_CXX_COMPILER": "/usr/local/bin/arm-none-eabi-g++"
       }
     }
   ],
