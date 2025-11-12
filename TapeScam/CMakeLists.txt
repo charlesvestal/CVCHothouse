@@ -14,8 +14,11 @@ FetchContent_MakeAvailable(DaisySP)
 set(TAPESCAM_SHARED_DSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared_dsp")
 set(LIBDAISY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../extern/libDaisy")
 
+add_subdirectory(${LIBDAISY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/libDaisy)
+
 add_executable(TapeScam
   TapeScam.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../hothouse.cpp
   ${TAPESCAM_SHARED_DSP_DIR}/GainStageModule.cpp
   ${TAPESCAM_SHARED_DSP_DIR}/TapeSatModule.cpp
   ${TAPESCAM_SHARED_DSP_DIR}/WowFlutterModule.cpp
@@ -37,6 +40,7 @@ target_include_directories(TapeScam PRIVATE
   ${TAPESCAM_SHARED_DSP_DIR}
   ${LIBDAISY_DIR}/src
   ${LIBDAISY_DIR}/src/sys
+  ${LIBDAISY_DIR}/src/usbh
   ${LIBDAISY_DIR}/Drivers/CMSIS/DSP/Include
   ${LIBDAISY_DIR}/Drivers/CMSIS/Include
   ${LIBDAISY_DIR}/Drivers/CMSIS-Device/ST/STM32H7xx/Include
@@ -44,13 +48,17 @@ target_include_directories(TapeScam PRIVATE
   ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc
   ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
   ${LIBDAISY_DIR}/Core/Inc
+  ${LIBDAISY_DIR}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+  ${LIBDAISY_DIR}/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
+  ${LIBDAISY_DIR}/Middlewares/Third_Party/FatFs/src
   "${DAISYSP_SOURCE_DIR}/Source"
   "${DAISYSP_SOURCE_DIR}/Source/Utility"
   "${DAISYSP_LGPL_DIR}"
 )
-target_link_libraries(TapeScam PRIVATE DaisySP)
+target_link_libraries(TapeScam PRIVATE DaisySP daisy)
 
 target_compile_definitions(TapeScam PRIVATE
+  FILEIO_ENABLE_FATFS_READER
   STM32H750xx
   USE_HAL_DRIVER
 )
