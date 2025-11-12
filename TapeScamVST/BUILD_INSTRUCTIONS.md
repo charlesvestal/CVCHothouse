@@ -94,11 +94,11 @@ add_subdirectory(../JUCE JUCE)
 
 ### Undefined symbols / linking errors
 
-Make sure all DSP source files are included in `CMakeLists.txt`:
+Make sure all DSP source files from the shared `TapeScam` checkout are included in `CMakeLists.txt` (or pass `-DTAPESCAM_DSP_PATH=/path/to/TapeScam` when configuring):
 ```cmake
 target_sources(TapeScamVST PRIVATE
-    DSP/GainStageModule.cpp
-    DSP/TapeSatModule.cpp
+    ${TAPESCAM_DSP_PATH}/GainStageModule.cpp
+    ${TAPESCAM_DSP_PATH}/TapeSatModule.cpp
     # ... etc
 )
 ```

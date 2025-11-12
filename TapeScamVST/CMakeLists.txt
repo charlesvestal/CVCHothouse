@@ -74,6 +74,23 @@ juce_add_plugin(TapeScamVST
     IS_IOS_APP_EXTENSION FALSE
 )
 
+set(TAPESCAM_DSP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../TapeScam/shared_dsp" CACHE PATH "Path to the shared TapeScam DSP sources")
+
+set(TAPESCAM_DSP_SOURCES
+    "${TAPESCAM_DSP_PATH}/GainStageModule.cpp"
+    "${TAPESCAM_DSP_PATH}/TapeSatModule.cpp"
+    "${TAPESCAM_DSP_PATH}/WowFlutterModule.cpp"
+    "${TAPESCAM_DSP_PATH}/HissDropModule.cpp"
+    "${TAPESCAM_DSP_PATH}/ToneModule.cpp"
+    "${TAPESCAM_DSP_PATH}/LoFiCompressor.cpp"
+)
+
+foreach(dsp_file IN LISTS TAPESCAM_DSP_SOURCES)
+    if (NOT EXISTS "${dsp_file}")
+        message(FATAL_ERROR "Missing DSP source ${dsp_file}. Set TAPESCAM_DSP_PATH to your TapeScam checkout.")
+    endif()
+endforeach()
+
 # Source files
 target_sources(TapeScamVST
     PRIVATE
@@ -82,12 +99,7 @@ target_sources(TapeScamVST
         Source/ui/GuiFactories.cpp
         Source/ui/MagicKnobWithOverlay.cpp
         Source/ui/MagicThreeWaySwitch.cpp
-        DSP/GainStageModule.cpp
-        DSP/TapeSatModule.cpp
-        DSP/WowFlutterModule.cpp
-        DSP/HissDropModule.cpp
-        DSP/ToneModule.cpp
-        DSP/LoFiCompressor.cpp
+        ${TAPESCAM_DSP_SOURCES}
 )
 
 file(GLOB TAPESCAM_GUI_IMAGES CONFIGURE_DEPENDS Resources/Images/*)
@@ -167,5 +179,5 @@ endif()
 target_include_directories(TapeScamVST
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Source
-        ${CMAKE_CURRENT_SOURCE_DIR}/DSP
+        ${TAPESCAM_DSP_PATH}
 )

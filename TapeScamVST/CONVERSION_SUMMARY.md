@@ -14,14 +14,7 @@ TapeScamVST/
 ├── Source/
 │   ├── PluginProcessor.h/cpp   - Main plugin processor
 │   └── PluginEditor.h/cpp       - UI implementation
-├── DSP/
-│   ├── SVFFilter.h              - State Variable Filter (replaces daisysp::Svf)
-│   ├── GainStageModule.h/cpp    - Input stage
-│   ├── TapeSatModule.h/cpp      - Tape saturation
-│   ├── WowFlutterModule.h/cpp   - Pitch modulation
-│   ├── HissDropModule.h/cpp     - Noise + dropouts
-│   ├── ToneModule.h/cpp         - EQ shaping
-│   └── LoFiCompressor.h/cpp     - AGC compression
+├── (DSP sources pulled from ../TapeScam)
 ├── CMakeLists.txt               - Build configuration
 ├── README.md                    - User documentation
 ├── BUILD_INSTRUCTIONS.md        - Build guide
@@ -47,10 +40,10 @@ TapeScamVST/
 ## Technical Changes Made
 
 ### 1. DSP Module Adaptation
-- **Removed**: `daisysp.h` dependency
-- **Created**: `SVFFilter.h` - lightweight SVF implementation
-- **Modified**: All module headers to remove DaisySP includes
-- **Result**: 100% portable C++ code, no embedded dependencies
+- **Removed**: duplicate DSP copies inside `TapeScamVST/DSP`
+- **Shared**: `TapeScam` firmware sources (`GainStageModule`, `TapeSatModule`, etc.) via `TAPESCAM_DSP_PATH`
+- **Modified**: Build now treats TapeScam as an external dependency, so updates propagate automatically
+- **Result**: Single source of truth for DSP, no plugin-specific forks
 
 ### 2. Parameter System
 Mapped hardware controls → plugin parameters:
@@ -198,7 +191,7 @@ Input → GainStage → TapeSat → WowFlutter → HissDrops → Tone → LoFiCo
 - Compression envelope following
 
 ### Changed (Adapted for Plugin)
-- Header includes (`daisysp.h` → `SVFFilter.h`)
+- Header includes now point directly at the shared TapeScam headers
 - Parameter input (hardware knobs → automation parameters)
 - Audio I/O (Daisy buffer → JUCE AudioBuffer)
 - UI rendering (none → JUCE Components)

@@ -11,13 +11,16 @@ FetchContent_Declare(
 set(FETCHCONTENT_UPDATES_DISCONNECTED_DAISYSP ON)
 FetchContent_MakeAvailable(DaisySP)
 
+set(TAPESCAM_SHARED_DSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared_dsp")
+
 add_executable(TapeScam
   TapeScam.cpp
-  GainStageModule.cpp
-  TapeSatModule.cpp
-  WowFlutterModule.cpp
-  HissDropModule.cpp
-  ToneModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/GainStageModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/TapeSatModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/WowFlutterModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/HissDropModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/ToneModule.cpp
+  ${TAPESCAM_SHARED_DSP_DIR}/LoFiCompressor.cpp
 )
 if(NOT DEFINED DAISYSP_SOURCE_DIR)
   message(FATAL_ERROR "DAISYSP_SOURCE_DIR not defined; DaisySP FetchContent failed?")
@@ -29,6 +32,7 @@ target_sources(TapeScam PRIVATE
   "${DAISYSP_LGPL_DIR}/Filters/tone.cpp"
 )
 target_include_directories(TapeScam PRIVATE
+  ${TAPESCAM_SHARED_DSP_DIR}
   "${DAISYSP_SOURCE_DIR}/Source"
   "${DAISYSP_SOURCE_DIR}/Source/Utility"
   "${DAISYSP_LGPL_DIR}"

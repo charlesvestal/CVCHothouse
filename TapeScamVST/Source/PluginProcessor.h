@@ -2,12 +2,12 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <foleys_gui_magic/foleys_gui_magic.h>
-#include "../DSP/GainStageModule.h"
-#include "../DSP/TapeSatModule.h"
-#include "../DSP/WowFlutterModule.h"
-#include "../DSP/HissDropModule.h"
-#include "../DSP/ToneModule.h"
-#include "../DSP/LoFiCompressor.h"
+#include "GainStageModule.h"
+#include "TapeSatModule.h"
+#include "WowFlutterModule.h"
+#include "HissDropModule.h"
+#include "ToneModule.h"
+#include "LoFiCompressor.h"
 
 //==============================================================================
 class TapeScamAudioProcessor  : public juce::AudioProcessor
