@@ -12,6 +12,7 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED_DAISYSP ON)
 FetchContent_MakeAvailable(DaisySP)
 
 set(TAPESCAM_SHARED_DSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared_dsp")
+set(LIBDAISY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../extern/libDaisy")
 
 add_executable(TapeScam
   TapeScam.cpp
@@ -32,8 +33,14 @@ target_sources(TapeScam PRIVATE
   "${DAISYSP_LGPL_DIR}/Filters/tone.cpp"
 )
 target_include_directories(TapeScam PRIVATE
-  ${TAPESCAM_SHARED_DSP_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/..
+  ${TAPESCAM_SHARED_DSP_DIR}
+  ${LIBDAISY_DIR}/src
+  ${LIBDAISY_DIR}/Drivers/CMSIS/DSP/Include
+  ${LIBDAISY_DIR}/Drivers/CMSIS/Include
+  ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc
+  ${LIBDAISY_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
+  ${LIBDAISY_DIR}/Core/Inc
   "${DAISYSP_SOURCE_DIR}/Source"
   "${DAISYSP_SOURCE_DIR}/Source/Utility"
   "${DAISYSP_LGPL_DIR}"
