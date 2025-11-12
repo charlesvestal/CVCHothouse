@@ -38,9 +38,9 @@ class HissDropModule
     void  ResetPink();
     float ComputeNextDropInterval();
 
-    static constexpr float kAmountSmooth    = 0.01f;
+    static constexpr float kAmountSmooth    = 0.5f;   // Near-instant for plugin (was 0.01f hardware)
     static constexpr float kBypassThreshold = 0.0005f;
-    static constexpr float kDropoutSlew     = 0.0025f;
+    static constexpr float kDropoutSlew     = 0.1f;   // Near-instant (was 0.0025f)
     static constexpr float kMinDropoutGain  = 0.02f;
 
     float sampleRate_      = 48000.0f;

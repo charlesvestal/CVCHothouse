@@ -3,7 +3,6 @@
 #include <cmath>
 #include <memory>
 #include <cstdint>
-#include "daisysp.h"
 
 class WowFlutterModule
 {
@@ -96,7 +95,7 @@ class WowFlutterModule
     float baseDelaySamplesR_ = 0.0f;
 
 
-    static constexpr float kAmountSmooth = 0.005f;
+    static constexpr float kAmountSmooth = 0.3f;  // Near-instant for plugin (was 0.005f hardware)
     static constexpr float kDriftSmooth  = 0.0008f;
     static constexpr float kDriftCoeff  = 0.00015f;  // 10× slower drift
     static constexpr float kDriftScale  = 0.0006f;

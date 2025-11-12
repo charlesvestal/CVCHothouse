@@ -62,8 +62,8 @@ float LoFiCompressor::ProcessGain(float envelope, float inputLevel)
         float reduction = threshold_ - envelope;  // How far below threshold (0.0 to threshold_)
 
         // Linear mapping instead of exponential to reduce artifacts
-        // Increased boost for dramatic AGC pumping effect
-        float maxBoost = mode_ == 2 ? 20.0f : 10.0f;  // Maximum gain multiplier - EXTREME pumping!
+        // Moderate boost for AGC pumping effect (reduced to prevent clipping)
+        float maxBoost = mode_ == 2 ? 12.0f : 6.0f;  // Maximum gain multiplier (reduced from 20x/10x)
         float normalizedReduction = reduction / threshold_;  // 0.0 to 1.0
         float gain = 1.0f + (maxBoost - 1.0f) * normalizedReduction;  // Linear ramp
 
@@ -114,12 +114,17 @@ void LoFiCompressor::Process(float* left, float* right, size_t size)
         smoothedGainR_ += (targetGainR - smoothedGainR_) * smoothCoeffR;
 
         // Limit gain to prevent any possibility of clipping
-        // This prevents the output from exceeding ±1.0 without needing saturation
-        float maxGainL = absL > 0.001f ? 0.95f / absL : smoothedGainL_;
-        float maxGainR = absR > 0.001f ? 0.95f / absR : smoothedGainR_;
+        // Cap maximum gain to reasonable values to prevent distortion
+        const float maxAllowedGain = mode_ == 2 ? 15.0f : 8.0f;  // Reduced from 20x/10x
+        float cappedGainL = smoothedGainL_ > maxAllowedGain ? maxAllowedGain : smoothedGainL_;
+        float cappedGainR = smoothedGainR_ > maxAllowedGain ? maxAllowedGain : smoothedGainR_;
 
-        float finalGainL = smoothedGainL_ < maxGainL ? smoothedGainL_ : maxGainL;
-        float finalGainR = smoothedGainR_ < maxGainR ? smoothedGainR_ : maxGainR;
+        // Additional per-sample safety limiter
+        float maxGainL = absL > 0.001f ? 0.9f / absL : cappedGainL;
+        float maxGainR = absR > 0.001f ? 0.9f / absR : cappedGainR;
+
+        float finalGainL = cappedGainL < maxGainL ? cappedGainL : maxGainL;
+        float finalGainR = cappedGainR < maxGainR ? cappedGainR : maxGainR;
 
         // Apply gain (this will boost quiet parts, making hiss louder)
         left[i] = inL * finalGainL;

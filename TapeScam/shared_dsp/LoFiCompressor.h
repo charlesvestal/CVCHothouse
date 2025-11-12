@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>  // for size_t
+
 // Lo-Fi Upward Compressor - mimics cheap cassette deck AGC
 // Boosts quiet signals, making background hiss "breathe" and pump
 class LoFiCompressor

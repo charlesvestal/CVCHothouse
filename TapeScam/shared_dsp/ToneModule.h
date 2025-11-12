@@ -41,7 +41,7 @@ class ToneModule
     float bassCutoff_   = 120.0f;
     float trebleCutoff_ = 6000.0f;
 
-    static constexpr float kSmooth = 0.01f;
+    static constexpr float kSmooth = 0.5f;  // Near-instant for plugin (was 0.01f hardware)
 
     std::vector<BiquadState> lowShelf_;
     std::vector<BiquadState> highShelf_;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include "daisysp.h"
+#include "SVFFilter.h"
 
 class TapeSatModule
 {
@@ -64,13 +64,13 @@ class TapeSatModule
     float highSaturationLimit_ = 1.0f;  // Limits high-band saturation to reduce aliasing
 
     // Pre-saturation anti-aliasing filter (band-limits input before nonlinearity)
-    daisysp::Svf preSatLPF_[2];  // Removes ultra-HF content to reduce aliasing
+    SVFFilter preSatLPF_[2];  // Removes ultra-HF content to reduce aliasing
 
     // Biquad per channel for HF roll-off
-    daisysp::Svf hfRollOff_[2];
+    SVFFilter hfRollOff_[2];
 
     // Split-band processing for frequency-dependent saturation
-    daisysp::Svf crossover_[2];  // Low/high split at ~400Hz
+    SVFFilter crossover_[2];  // Low/high split at ~400Hz
 
     // Slow compression envelope followers (for tape-like compression)
     float compEnvelopeL_ = 0.0f;
@@ -79,7 +79,7 @@ class TapeSatModule
     float compReleaseCoeff_ = 0.001f; // ~100ms at 48kHz
 
     // Smoothing coefficient for drive parameter
-    float driveSmoothCoeff_ = 0.005f;
+    float driveSmoothCoeff_ = 0.3f;  // Near-instant for plugin (was 0.005f hardware)
 
     // History for linear interpolation in oversampling
     float bassL_prev_ = 0.0f;

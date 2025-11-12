@@ -15,8 +15,6 @@ constexpr float kKneeEnd     = 0.9f;   // Soft knee end (was hard threshold at 0
 constexpr float kDriveBypass = 0.01f;  // below this we bypass processing
 }
 
-using daisysp::Biquad;
-
 void TapeSatModule::Init(float sampleRate)
 {
     sampleRate_ = sampleRate;

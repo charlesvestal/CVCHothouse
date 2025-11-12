@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include "daisysp.h"
 
 class GainStageModule
 {
