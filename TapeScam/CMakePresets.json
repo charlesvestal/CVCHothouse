@@ -1,0 +1,30 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "daisy-release",
+      "displayName": "Daisy Seed (Release)",
+      "description": "Build TapeScam firmware for Daisy Seed using the ARM GNU toolchain.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/daisy-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../extern/libDaisy/cmake/toolchains/ArmGNUToolchain.cmake"
+      },
+      "environment": {
+        "CMAKE_C_COMPILER": "/Library/DaisyToolchain/0.2.0/bin/arm-none-eabi-gcc"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "daisy-release",
+      "configurePreset": "daisy-release"
+    }
+  ]
+}
