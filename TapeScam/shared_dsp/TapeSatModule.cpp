@@ -1,12 +1,13 @@
 #include "TapeSatModule.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
 constexpr float kMinRollOffHz = 14000.0f;  // Raised from 12kHz for cleaner highs
 constexpr float kMaxRollOffHz = 20000.0f;
-constexpr float kMaxDriveDb  = 18.0f;
+constexpr float kMaxDriveDb  = 24.0f;
 constexpr float kBiasRange   = 0.5f;   // up to +50% bias gain
 constexpr float kCompMin     = 1.0f;
 constexpr float kCompRange   = 3.0f;   // up to 4:1
@@ -75,7 +76,9 @@ void TapeSatModule::Init(float sampleRate)
 
 void TapeSatModule::SetDrive(float normalizedDrive)
 {
-    targetDrive_ = Clamp(normalizedDrive, 0.0f, 1.0f);
+    float shaped = Clamp(normalizedDrive, 0.0f, 1.0f);
+    shaped = std::pow(shaped, 0.8f); // more impact earlier in the knob travel
+    targetDrive_ = shaped;
     paramsDirty_ = true;
 }
 
@@ -134,7 +137,7 @@ void TapeSatModule::UpdateControls()
     tapeDriveLin_         = dBToLin(tapeDrive_dB_);
 
     // Apply drive multiplier to saturation factor
-    tapeSaturationFactor_ = drive * driveMultiplier_;
+    tapeSaturationFactor_ = Clamp(drive * 1.35f * driveMultiplier_, 0.0f, 2.0f);
 
     // High-frequency compression is tighter (faster, more aggressive)
     tapeCompressionRatio_ = kCompMin + drive * kCompRange;
@@ -144,7 +147,7 @@ void TapeSatModule::UpdateControls()
 
     // Asymmetry creates even-order harmonics (tape hysteresis)
     // Bass band: Quadratic mapping for smooth growth, up to 0.4 asymmetry
-    asymmetryAmount_ = drive * drive * 0.4f;
+    asymmetryAmount_ = drive * drive * 0.55f;
 
     // High band: Dead zone below 0.1 drive, then gentler asymmetry growth
     // This reduces high-frequency harmonic generation to minimize aliasing
@@ -156,13 +159,13 @@ void TapeSatModule::UpdateControls()
     {
         // Quadratic mapping: (drive - 0.1)^2 scaled to 0.0 → 0.25 (less than bass)
         float driveScaled = (drive - 0.1f) / 0.9f;  // Normalize to 0-1
-        asymmetryAmountHigh_ = driveScaled * driveScaled * 0.25f;
+        asymmetryAmountHigh_ = driveScaled * driveScaled * 0.35f;
     }
 
     // High-band saturation limiter: reduce saturation strength in highs to prevent aliasing
     // At drive=0: moderate saturation (0.6x)
     // At drive=1: very limited to 0.3x saturation strength
-    highSaturationLimit_ = 0.6f - drive * 0.3f;  // 0.6 → 0.3
+    highSaturationLimit_ = 0.7f - drive * 0.4f;  // 0.7 → 0.3
 
     // Use override cutoff if set, otherwise calculate based on drive
     if(hfRolloffOverride_ > 0.0f)

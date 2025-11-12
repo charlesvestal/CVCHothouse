@@ -56,6 +56,8 @@ class GainStageModule
 
         void SetLowShelf(float sampleRate, float freq, float gainDb, float shelfSlope = 1.0f);
         void SetHighShelf(float sampleRate, float freq, float gainDb, float shelfSlope = 1.0f);
+        void SetLowpass(float sampleRate, float freq, float q = 0.7071f);
+        void SetHighpass(float sampleRate, float freq, float q = 0.7071f);
     };
 
     struct OnePoleLowpass
@@ -101,6 +103,7 @@ class GainStageModule
     float inputCompGain_ = 1.0f;
     float characterDriveScale_ = 1.0f;
     float boostFactor_ = 1.8f;
+    float driveEnv_[2] = {0.0f, 0.0f};
 
     // Headroom adjustment for tape age/condition
     float headroomAdjustmentDb_ = 0.0f;
@@ -114,6 +117,9 @@ class GainStageModule
 
     bool  loFiEnabled_ = false;
     OnePoleLowpass loFiLowpass_[2];
+    BiquadFilter mkPreHP_[2];
+    BiquadFilter mkPreLP_[2];
+    BiquadFilter mkPostLP_[2];
 
     float lastBassSetting_ = std::numeric_limits<float>::quiet_NaN();
     float lastTrebleSetting_ = std::numeric_limits<float>::quiet_NaN();

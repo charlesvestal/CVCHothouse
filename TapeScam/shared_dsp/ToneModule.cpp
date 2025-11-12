@@ -35,9 +35,12 @@ void ToneModule::UpdateControls()
         smoothedAmount_ = targetAmount_;
     }
 
-    float amt = smoothedAmount_;
-    bassGainDb_   = amt * 12.0f - 6.0f;
-    trebleGainDb_ = amt * 12.0f - 6.0f;
+    const float amt = smoothedAmount_;
+    const float normalized = (1.0f - amt) * 2.0f - 1.0f; // invert so 1.0 is bright
+    const float shaped = normalized * (1.0f + 0.9f * std::fabs(normalized));
+    constexpr float gainRangeDb = 15.0f; // ±15 dB sweep
+    bassGainDb_   = shaped * gainRangeDb;
+    trebleGainDb_ = shaped * gainRangeDb;
     UpdateCoefficients();
 }
 

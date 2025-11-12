@@ -9,6 +9,10 @@ constexpr float kBassFreqHz   = 120.0f;
 constexpr float kTrebleFreqHz = 6000.0f;
 constexpr float kLoFiCutHz    = 10000.0f;
 constexpr float kMinThreshold = 0.2f;
+constexpr float kMkPreHighpassHz = 160.0f;
+constexpr float kMkPreLowpassHz  = 5200.0f;
+constexpr float kMkPostLowpassHz = 11000.0f;
+constexpr float kDriveEnvCoeff   = 0.02f;
 }
 
 void GainStageModule::BiquadFilter::SetLowShelf(float sampleRate, float freq, float gainDb, float shelfSlope)
@@ -63,6 +67,54 @@ void GainStageModule::BiquadFilter::SetHighShelf(float sampleRate, float freq, f
     this->a2 = a2;
 }
 
+void GainStageModule::BiquadFilter::SetLowpass(float sampleRate, float freq, float q)
+{
+    const float w0 = 2.0f * kPi * freq / sampleRate;
+    const float cosw0 = cosf(w0);
+    const float sinw0 = sinf(w0);
+    const float alpha = sinw0 / (2.0f * q);
+
+    float b0 = (1.0f - cosw0) * 0.5f;
+    float b1 = 1.0f - cosw0;
+    float b2 = (1.0f - cosw0) * 0.5f;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cosw0;
+    float a2 = 1.0f - alpha;
+
+    b0 /= a0; b1 /= a0; b2 /= a0;
+    a1 /= a0; a2 /= a0;
+
+    this->b0 = b0;
+    this->b1 = b1;
+    this->b2 = b2;
+    this->a1 = a1;
+    this->a2 = a2;
+}
+
+void GainStageModule::BiquadFilter::SetHighpass(float sampleRate, float freq, float q)
+{
+    const float w0 = 2.0f * kPi * freq / sampleRate;
+    const float cosw0 = cosf(w0);
+    const float sinw0 = sinf(w0);
+    const float alpha = sinw0 / (2.0f * q);
+
+    float b0 =  (1.0f + cosw0) * 0.5f;
+    float b1 = -(1.0f + cosw0);
+    float b2 =  (1.0f + cosw0) * 0.5f;
+    float a0 =   1.0f + alpha;
+    float a1 =  -2.0f * cosw0;
+    float a2 =   1.0f - alpha;
+
+    b0 /= a0; b1 /= a0; b2 /= a0;
+    a1 /= a0; a2 /= a0;
+
+    this->b0 = b0;
+    this->b1 = b1;
+    this->b2 = b2;
+    this->a1 = a1;
+    this->a2 = a2;
+}
+
 void GainStageModule::Init(float sampleRate)
 {
     sampleRate_ = sampleRate;
@@ -103,6 +155,17 @@ void GainStageModule::Init(float sampleRate)
     {
         lp.z = 0.0f;  // Explicit state reset
         lp.SetCutoff(sampleRate_, kLoFiCutHz);
+    }
+
+    for(int ch = 0; ch < 2; ++ch)
+    {
+        mkPreHP_[ch].Reset();
+        mkPreHP_[ch].SetHighpass(sampleRate_, kMkPreHighpassHz, 0.7071f);
+        mkPreLP_[ch].Reset();
+        mkPreLP_[ch].SetLowpass(sampleRate_, kMkPreLowpassHz, 0.7071f);
+        mkPostLP_[ch].Reset();
+        mkPostLP_[ch].SetLowpass(sampleRate_, kMkPostLowpassHz, 0.7071f);
+        driveEnv_[ch] = 0.0f;
     }
 
     ComputeFilterCoeffs();
@@ -255,6 +318,10 @@ float GainStageModule::ApplyClipping(float inSample) const
         }
     }
 
+    const float asym = 0.02f + 0.08f * params_.character;
+    const float even = v * v;
+    v += asym * even * (v >= 0.0f ? 1.0f : -1.0f);
+
     return v;
 }
 
@@ -303,8 +370,34 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
         preL *= channelGainLin_;
         preR *= channelGainLin_;
 
+        const float rawPreL = preL;
+        const float rawPreR = preR;
+
+        driveEnv_[0] += (fabsf(preL) - driveEnv_[0]) * kDriveEnvCoeff;
+        driveEnv_[1] += (fabsf(preR) - driveEnv_[1]) * kDriveEnvCoeff;
+
+        if(!rawTap)
+        {
+            const float dynL = 1.0f + (0.12f * params_.driveNorm) * driveEnv_[0];
+            const float dynR = 1.0f + (0.12f * params_.driveNorm) * driveEnv_[1];
+
+            float shapedPreL = mkPreHP_[0].Process(preL * dynL);
+            shapedPreL = mkPreLP_[0].Process(shapedPreL);
+            preL = 0.35f * shapedPreL + 0.65f * preL;
+
+            float shapedPreR = mkPreHP_[1].Process(preR * dynR);
+            shapedPreR = mkPreLP_[1].Process(shapedPreR);
+            preR = 0.35f * shapedPreR + 0.65f * preR;
+        }
+
         float clipL = skipClip ? preL : ApplyClipping(preL);
         float clipR = skipClip ? preR : ApplyClipping(preR);
+
+        if(!rawTap)
+        {
+            clipL = mkPostLP_[0].Process(clipL);
+            clipR = mkPostLP_[1].Process(clipR);
+        }
 
         float toneL = clipL;
         float toneR = clipR;
@@ -323,8 +416,8 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
             }
         }
 
-        float selectedL = rawTap ? preL : toneL;
-        float selectedR = rawTap ? preR : toneR;
+        float selectedL = rawTap ? rawPreL : toneL;
+        float selectedR = rawTap ? rawPreR : toneR;
 
         selectedL *= masterVolLin_;
         selectedR *= masterVolLin_;
