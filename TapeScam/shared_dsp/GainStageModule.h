@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -104,6 +105,79 @@ class GainStageModule
     float characterDriveScale_ = 1.0f;
     float boostFactor_ = 1.8f;
     float driveEnv_[2] = {0.0f, 0.0f};
+
+    struct Oversampler2x
+    {
+        void Init(float sampleRate, float preCut, float postCut)
+        {
+            sampleRate2x_ = sampleRate * 2.0f;
+            Configure(preCut, preB0_, preB1_, preB2_, preA1_, preA2_);
+            Configure(postCut, postB0_, postB1_, postB2_, postA1_, postA2_);
+            Reset();
+        }
+
+        void Configure(float cutoff, float& b0, float& b1, float& b2, float& a1, float& a2)
+        {
+            const float w0 = 2.0f * kPi * cutoff / sampleRate2x_;
+            const float cosw0 = cosf(w0);
+            const float sinw0 = sinf(w0);
+            const float alpha = sinw0 / (2.0f * 0.7071f);
+            const float B0 = (1.0f - cosw0) * 0.5f;
+            const float B1 = 1.0f - cosw0;
+            const float B2 = (1.0f - cosw0) * 0.5f;
+            const float A0 = 1.0f + alpha;
+            const float A1 = -2.0f * cosw0;
+            const float A2 = 1.0f - alpha;
+            b0 = B0 / A0;
+            b1 = B1 / A0;
+            b2 = B2 / A0;
+            a1 = A1 / A0;
+            a2 = A2 / A0;
+        }
+
+        void Reset()
+        {
+            prevInput_ = 0.0f;
+            preZ1_ = preZ2_ = 0.0f;
+            postZ1_ = postZ2_ = 0.0f;
+        }
+
+        std::array<float,2> Upsample(float input)
+        {
+            float mid = 0.5f * (prevInput_ + input);
+            prevInput_ = input;
+            return { mid, input };
+        }
+
+        float PreFilter(float x)
+        {
+            float y = preB0_ * x + preZ1_;
+            preZ1_ = preB1_ * x - preA1_ * y + preZ2_;
+            preZ2_ = preB2_ * x - preA2_ * y;
+            return y;
+        }
+
+        float PostFilter(float x)
+        {
+            float y = postB0_ * x + postZ1_;
+            postZ1_ = postB1_ * x - postA1_ * y + postZ2_;
+            postZ2_ = postB2_ * x - postA2_ * y;
+            return y;
+        }
+
+      private:
+        float sampleRate2x_ = 96000.0f;
+        float prevInput_ = 0.0f;
+        float preB0_ = 1.0f, preB1_ = 0.0f, preB2_ = 0.0f;
+        float preA1_ = 0.0f, preA2_ = 0.0f;
+        float postB0_ = 1.0f, postB1_ = 0.0f, postB2_ = 0.0f;
+        float postA1_ = 0.0f, postA2_ = 0.0f;
+        float preZ1_ = 0.0f, preZ2_ = 0.0f;
+        float postZ1_ = 0.0f, postZ2_ = 0.0f;
+    };
+
+    Oversampler2x oversamplerL_;
+    Oversampler2x oversamplerR_;
 
     // Headroom adjustment for tape age/condition
     float headroomAdjustmentDb_ = 0.0f;

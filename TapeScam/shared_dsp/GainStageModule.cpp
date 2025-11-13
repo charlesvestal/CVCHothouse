@@ -390,13 +390,39 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
             preR = 0.35f * shapedPreR + 0.65f * preR;
         }
 
-        float clipL = skipClip ? preL : ApplyClipping(preL);
-        float clipR = skipClip ? preR : ApplyClipping(preR);
+        float clipL = preL;
+        float clipR = preR;
 
-        if(!rawTap)
+        if(rawTap)
         {
-            clipL = mkPostLP_[0].Process(clipL);
-            clipR = mkPostLP_[1].Process(clipR);
+            clipL = skipClip ? preL : ApplyClipping(preL);
+            clipR = skipClip ? preR : ApplyClipping(preR);
+        }
+        else
+        {
+            auto upL = oversamplerL_.Upsample(preL);
+            auto upR = oversamplerR_.Upsample(preR);
+
+            float processedL = 1.0f;
+            for(float os : upL)
+            {
+                float s = oversamplerL_.PreFilter(os);
+                s = skipClip ? s : ApplyClipping(s);
+                s = oversamplerL_.PostFilter(s);
+                processedL = s;
+            }
+
+            float processedR = 1.0f;
+            for(float os : upR)
+            {
+                float s = oversamplerR_.PreFilter(os);
+                s = skipClip ? s : ApplyClipping(s);
+                s = oversamplerR_.PostFilter(s);
+                processedR = s;
+            }
+
+            clipL = mkPostLP_[0].Process(processedL);
+            clipR = mkPostLP_[1].Process(processedR);
         }
 
         float toneL = clipL;
