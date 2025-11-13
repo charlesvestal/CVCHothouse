@@ -22,7 +22,8 @@ void DropoutModule::Reset()
         st = {};
         st.env = 1.0f;
     }
-    clusterCountdownSamples_ = 0.0f;
+    restSamplesLeft_ = 0.0f;
+    clusterWindowSamples_ = 0.0f;
 }
 
 void DropoutModule::SetParams(const DropoutParams& params)
@@ -31,6 +32,7 @@ void DropoutModule::SetParams(const DropoutParams& params)
     params_.rateHz      = std::max(0.0f, params_.rateHz);
     params_.monoLink    = std::clamp(params_.monoLink, 0.0f, 1.0f);
     params_.clusterProb = std::clamp(params_.clusterProb, 0.0f, 1.0f);
+    params_.minRestSec  = std::max(0.0f, params_.minRestSec);
 }
 
 void DropoutModule::Process(float** buffers, size_t numSamples, size_t numChannels)
@@ -48,16 +50,22 @@ void DropoutModule::Process(float** buffers, size_t numSamples, size_t numChanne
         return;
     }
 
-    // Determine whether to trigger an event this block
-    const float blockProb = params_.rateHz * static_cast<float>(numSamples) / sampleRate_;
-    bool trigger = (!AnyActive()) && (NextRandom() < blockProb);
+    // Update rest/cluster timers
+    if(restSamplesLeft_ > 0.0f)
+        restSamplesLeft_ = std::max(0.0f, restSamplesLeft_ - static_cast<float>(numSamples));
+    if(clusterWindowSamples_ > 0.0f)
+        clusterWindowSamples_ = std::max(0.0f, clusterWindowSamples_ - static_cast<float>(numSamples));
 
-    if(!trigger && clusterCountdownSamples_ > 0.0f && !AnyActive())
+    const float blockProb = params_.rateHz * static_cast<float>(numSamples) / sampleRate_;
+    const bool readyForNewEvent = restSamplesLeft_ <= 0.0f;
+    bool trigger = (!AnyActive()) && readyForNewEvent && (NextRandom() < blockProb);
+
+    if(!trigger && !AnyActive() && clusterWindowSamples_ > 0.0f && params_.clusterProb > 0.0f)
     {
-        clusterCountdownSamples_ = std::max(0.0f, clusterCountdownSamples_ - static_cast<float>(numSamples));
-        if(clusterCountdownSamples_ > 0.0f && NextRandom() < params_.clusterProb)
+        if(NextRandom() < params_.clusterProb)
         {
             trigger = true;
+            clusterWindowSamples_ = 0.0f;
         }
     }
 
@@ -156,7 +164,8 @@ float DropoutModule::AdvanceState(DropoutState& state)
                 state.active = false;
                 state.env = 1.0f;
                 state.justEnded = true;
-                clusterCountdownSamples_ = kClusterWindowSec * sampleRate_;
+                restSamplesLeft_ = std::max(restSamplesLeft_, params_.minRestSec * sampleRate_);
+                clusterWindowSamples_ = kClusterWindowSec * sampleRate_;
             }
             break;
         }

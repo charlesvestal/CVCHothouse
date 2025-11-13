@@ -13,6 +13,7 @@ struct DropoutParams
     float durMaxMs    = 0.0f;
     float clusterProb = 0.0f;  // probability of quick follow-up event
     float monoLink    = 1.0f;  // 1 = both channels linked
+    float minRestSec  = 0.0f;  // enforced downtime after each event
 };
 
 class DropoutModule
@@ -46,6 +47,7 @@ class DropoutModule
     DropoutParams params_{};
     DropoutState  states_[2];
 
-    float clusterCountdownSamples_ = 0.0f;
+    float restSamplesLeft_       = 0.0f;
+    float clusterWindowSamples_  = 0.0f;
     uint32_t randState_ = 0x1234567u;
 };
