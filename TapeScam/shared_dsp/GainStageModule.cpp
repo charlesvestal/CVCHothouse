@@ -13,6 +13,8 @@ constexpr float kMkPreHighpassHz = 160.0f;
 constexpr float kMkPreLowpassHz  = 5200.0f;
 constexpr float kMkPostLowpassHz = 11000.0f;
 constexpr float kDriveEnvCoeff   = 0.02f;
+constexpr float kOversamplePreCutHz  = 23000.0f;
+constexpr float kOversamplePostCutHz = 20000.0f;
 }
 
 void GainStageModule::BiquadFilter::SetLowShelf(float sampleRate, float freq, float gainDb, float shelfSlope)
@@ -167,6 +169,9 @@ void GainStageModule::Init(float sampleRate)
         mkPostLP_[ch].SetLowpass(sampleRate_, kMkPostLowpassHz, 0.7071f);
         driveEnv_[ch] = 0.0f;
     }
+
+    oversamplerL_.Init(sampleRate_, kOversamplePreCutHz, kOversamplePostCutHz);
+    oversamplerR_.Init(sampleRate_, kOversamplePreCutHz, kOversamplePostCutHz);
 
     ComputeFilterCoeffs();
 }

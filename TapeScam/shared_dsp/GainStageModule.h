@@ -106,11 +106,13 @@ class GainStageModule
     float boostFactor_ = 1.8f;
     float driveEnv_[2] = {0.0f, 0.0f};
 
-    struct Oversampler2x
+    struct Oversampler4x
     {
+        static constexpr int kFactor = 4;
+
         void Init(float sampleRate, float preCut, float postCut)
         {
-            sampleRate2x_ = sampleRate * 2.0f;
+            sampleRate4x_ = sampleRate * 4.0f;
             Configure(preCut, preB0_, preB1_, preB2_, preA1_, preA2_);
             Configure(postCut, postB0_, postB1_, postB2_, postA1_, postA2_);
             Reset();
@@ -118,7 +120,7 @@ class GainStageModule
 
         void Configure(float cutoff, float& b0, float& b1, float& b2, float& a1, float& a2)
         {
-            const float w0 = 2.0f * kPi * cutoff / sampleRate2x_;
+            const float w0 = 2.0f * kPi * cutoff / sampleRate4x_;
             const float cosw0 = cosf(w0);
             const float sinw0 = sinf(w0);
             const float alpha = sinw0 / (2.0f * 0.7071f);
@@ -142,16 +144,23 @@ class GainStageModule
             postZ1_ = postZ2_ = 0.0f;
         }
 
-        std::array<float,2> Upsample(float input)
+        std::array<float, kFactor> Upsample(float input)
         {
-            float mid = 0.5f * (prevInput_ + input);
+            std::array<float, kFactor> up{};
+            const float step = (input - prevInput_) / static_cast<float>(kFactor);
+            float value = prevInput_ + step;
+            for(int i = 0; i < kFactor; ++i)
+            {
+                up[i] = value;
+                value += step;
+            }
             prevInput_ = input;
-            return { mid, input };
+            return up;
         }
 
         float PreFilter(float x)
         {
-            float y = preB0_ * x + preZ1_;
+            const float y = preB0_ * x + preZ1_;
             preZ1_ = preB1_ * x - preA1_ * y + preZ2_;
             preZ2_ = preB2_ * x - preA2_ * y;
             return y;
@@ -159,14 +168,14 @@ class GainStageModule
 
         float PostFilter(float x)
         {
-            float y = postB0_ * x + postZ1_;
+            const float y = postB0_ * x + postZ1_;
             postZ1_ = postB1_ * x - postA1_ * y + postZ2_;
             postZ2_ = postB2_ * x - postA2_ * y;
             return y;
         }
 
       private:
-        float sampleRate2x_ = 96000.0f;
+        float sampleRate4x_ = 192000.0f;
         float prevInput_ = 0.0f;
         float preB0_ = 1.0f, preB1_ = 0.0f, preB2_ = 0.0f;
         float preA1_ = 0.0f, preA2_ = 0.0f;
@@ -176,8 +185,8 @@ class GainStageModule
         float postZ1_ = 0.0f, postZ2_ = 0.0f;
     };
 
-    Oversampler2x oversamplerL_;
-    Oversampler2x oversamplerR_;
+    Oversampler4x oversamplerL_;
+    Oversampler4x oversamplerR_;
 
     // Headroom adjustment for tape age/condition
     float headroomAdjustmentDb_ = 0.0f;
