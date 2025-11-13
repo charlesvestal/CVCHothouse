@@ -33,6 +33,12 @@ void HissDropModule::Init(float sampleRate, size_t numChannels)
     randState_ ^= static_cast<uint32_t>(sampleRate_);
 
     pinkStates_.assign(numChannels_, {});
+
+    hissLevelOffsetDb_ = 0.0f;
+    noiseColorBias_ = 0.0f;
+    dropoutDepthScale_ = 1.0f;
+    dropoutDurationMinSec_ = 0.01f;
+    dropoutDurationMaxSec_ = 0.15f;
 }
 
 void HissDropModule::SetAmount(float amount)
@@ -52,32 +58,74 @@ void HissDropModule::SetDropoutRateMultiplier(float multiplier)
     dropoutRateMultiplier_ = Clamp(multiplier, 0.1f, 3.0f);
 }
 
+void HissDropModule::SetHissLevelOffsetDb(float offsetDb)
+{
+    hissLevelOffsetDb_ = offsetDb;
+}
+
+void HissDropModule::SetNoiseColorBias(float bias)
+{
+    noiseColorBias_ = bias;
+}
+
+void HissDropModule::SetDropoutDepthScale(float scale)
+{
+    dropoutDepthScale_ = Clamp(scale, 0.0f, 2.0f);
+}
+
+void HissDropModule::SetDropoutDurationRange(float minSeconds, float maxSeconds)
+{
+    dropoutDurationMinSec_ = std::max(0.001f, minSeconds);
+    dropoutDurationMaxSec_ = std::max(dropoutDurationMinSec_, maxSeconds);
+}
+
+void HissDropModule::SetDropoutBias(float bias)
+{
+    dropoutBias_ = Clamp(bias, 0.0f, 0.95f);
+}
+
+void HissDropModule::SetMinimumDropoutAmount(float minAmount)
+{
+    minDropoutAmount_ = Clamp(minAmount, 0.0f, 1.0f);
+}
+
 void HissDropModule::UpdateControls()
 {
-    const float delta = targetAmount_ - smoothedAmount_;
+    const float noiseAmt = Clamp(targetAmount_, 0.0f, 1.0f);
+    const float biasAdjusted = std::max(std::max(targetAmount_, minDropoutAmount_), dropoutBias_);
+    const float target = Clamp(biasAdjusted, 0.0f, 1.0f);
+    const float delta = target - smoothedAmount_;
     smoothedAmount_ += delta * kAmountSmooth;
     if(std::fabs(delta) < 1e-5f)
     {
-        smoothedAmount_ = targetAmount_;
+        smoothedAmount_ = target;
+    }
+
+    if(noiseAmt <= kBypassThreshold)
+    {
+        hissLevelDb_ = kMinHissDb;
+        hissLevelLin_ = 0.0f;
+        noiseColorFactor_ = 0.0f;
+    }
+    else
+    {
+        const float baseHissDb = kMinHissDb + noiseAmt * ((kMaxHissDb - kMinHissDb) + hissLevelOffsetDb_);
+        hissLevelDb_  = baseHissDb + 20.0f * log10f(hissMultiplier_);
+        hissLevelLin_ = DbToLin(hissLevelDb_);
+        noiseColorFactor_ = Clamp(noiseAmt + noiseColorBias_, 0.0f, 1.0f);
     }
 
     const float amt = smoothedAmount_;
-    // Apply hiss multiplier to the calculated hiss level
-    float baseHissDb = kMinHissDb + amt * (kMaxHissDb - kMinHissDb);
-    hissLevelDb_  = baseHissDb + 20.0f * log10f(hissMultiplier_); // Convert multiplier to dB
-    hissLevelLin_ = DbToLin(hissLevelDb_);
-    noiseColorFactor_ = amt;
-
-    // Apply dropout rate multiplier
-    dropoutRate_  = amt * 5.0f * dropoutRateMultiplier_;
-    dropoutDepth_ = Clamp(amt, 0.0f, 1.0f);
-    dropoutDurationSamples_ = (0.01f + amt * 0.14f) * sampleRate_;
+    dropoutRate_  = amt * dropoutRateMultiplier_ * 6.0f;
+    dropoutDepth_ = Clamp(amt * dropoutDepthScale_, 0.0f, 0.98f);
+    const float durationSec = dropoutDurationMinSec_ + amt * (dropoutDurationMaxSec_ - dropoutDurationMinSec_);
+    dropoutDurationSamples_ = durationSec * sampleRate_;
     if(dropoutDurationSamples_ < 1.0f)
         dropoutDurationSamples_ = 1.0f;
 
     if(dropoutRate_ > 0.0001f)
     {
-        avgDropSamples_ = (sampleRate_ * 60.0f) / dropoutRate_;
+        avgDropSamples_ = sampleRate_ / dropoutRate_;
         if(!inDropout_ && !std::isfinite(samplesUntilNextDrop_))
         {
             samplesUntilNextDrop_ = ComputeNextDropInterval();
@@ -137,7 +185,8 @@ void HissDropModule::Process(float** in, float** out, size_t size)
                 {
                     dropoutActive = true;
                     dropRemain = dropoutDurationSamples_;
-                    desiredGain = std::max(1.0f - dropoutDepth_, kMinDropoutGain);
+                    const float limitedDepth = Clamp(dropoutDepth_, 0.0f, 0.98f);
+                    desiredGain = std::max(1.0f - limitedDepth, kMinDropoutGain);
                 }
             }
             else
@@ -160,7 +209,7 @@ void HissDropModule::Process(float** in, float** out, size_t size)
             samplesUntil = std::numeric_limits<float>::infinity();
         }
 
-        dropGain += (desiredGain - dropGain) * kDropoutSlew;
+        dropGain += (desiredGain - dropGain) * (kDropoutSlew * 0.5f);
 
         for(size_t ch = 0; ch < numChannels_; ++ch)
         {
@@ -225,11 +274,14 @@ float HissDropModule::ComputeNextDropInterval()
 {
     if(dropoutRate_ <= 0.0001f || !std::isfinite(avgDropSamples_))
         return std::numeric_limits<float>::infinity();
-    float jitter = 0.8f + 0.4f * NextRand();
+    float jitter = 0.5f + 1.5f * NextRand();
     float interval = avgDropSamples_ * jitter;
-    float minInterval = dropoutDurationSamples_ + sampleRate_ * 0.01f;
+    const float minInterval = dropoutDurationSamples_ + sampleRate_ * 0.05f;
+    const float maxInterval = avgDropSamples_ * 4.0f;
     if(interval < minInterval)
         interval = minInterval;
+    if(interval > maxInterval)
+        interval = maxInterval;
     return interval;
 }
 
@@ -243,4 +295,3 @@ float HissDropModule::NextRandCentered()
 {
     return NextRand() * 2.0f - 1.0f;
 }
-

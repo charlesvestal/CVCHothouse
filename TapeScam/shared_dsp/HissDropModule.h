@@ -15,6 +15,12 @@ class HissDropModule
     // Set multipliers for tape age/condition (1.0 = normal)
     void SetHissMultiplier(float multiplier);
     void SetDropoutRateMultiplier(float multiplier);
+    void SetHissLevelOffsetDb(float offsetDb);
+    void SetNoiseColorBias(float bias);
+    void SetDropoutDepthScale(float scale);
+    void SetDropoutDurationRange(float minSeconds, float maxSeconds);
+    void SetDropoutBias(float bias);
+    void SetMinimumDropoutAmount(float minAmount);
 
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
@@ -69,6 +75,14 @@ class HissDropModule
 
     uint32_t randState_ = 0x1234567u;
     std::vector<PinkState> pinkStates_;
+
+    float hissLevelOffsetDb_ = 0.0f;
+    float noiseColorBias_ = 0.0f;
+    float dropoutDepthScale_ = 1.0f;
+    float dropoutDurationMinSec_ = 0.01f;
+    float dropoutDurationMaxSec_ = 0.15f;
+    float dropoutBias_ = 0.0f;
+    float minDropoutAmount_ = 0.0f;
 
     static inline float DbToLin(float db) { return std::pow(10.0f, db / 20.0f); }
     static inline float Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }

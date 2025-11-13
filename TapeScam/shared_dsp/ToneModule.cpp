@@ -36,11 +36,12 @@ void ToneModule::UpdateControls()
     }
 
     const float amt = smoothedAmount_;
-    const float normalized = (1.0f - amt) * 2.0f - 1.0f; // invert so 1.0 is bright
+    const float normalized = amt * 2.0f - 1.0f; // 0 = dark, 1 = bright
     const float shaped = normalized * (1.0f + 0.9f * std::fabs(normalized));
     constexpr float gainRangeDb = 15.0f; // ±15 dB sweep
-    bassGainDb_   = shaped * gainRangeDb;
-    trebleGainDb_ = shaped * gainRangeDb;
+    // Tilt EQ: positive shaped => treble boost, bass cut
+    bassGainDb_   = -shaped * gainRangeDb;
+    trebleGainDb_ =  shaped * gainRangeDb;
     UpdateCoefficients();
 }
 

@@ -94,6 +94,18 @@ void WowFlutterModule::SetDepthMultiplier(float multiplier)
     }
 }
 
+void WowFlutterModule::SetModeParameters(float wowDepthScale, float flutterDepthScale,
+                                         float wowRateMinHz, float wowRateMaxHz,
+                                         float flutterRateMinHz, float flutterRateMaxHz)
+{
+    wowDepthScale_ = Clamp(wowDepthScale, 0.2f, 3.0f);
+    flutterDepthScale_ = Clamp(flutterDepthScale, 0.2f, 3.0f);
+    wowRateMinHz_ = std::max(0.05f, wowRateMinHz);
+    wowRateMaxHz_ = std::max(wowRateMinHz_, wowRateMaxHz);
+    flutterRateMinHz_ = std::max(0.5f, flutterRateMinHz);
+    flutterRateMaxHz_ = std::max(flutterRateMinHz_, flutterRateMaxHz);
+}
+
 void WowFlutterModule::UpdateControls()
 {
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
@@ -102,10 +114,10 @@ void WowFlutterModule::UpdateControls()
 
     // Linear control for clarity - no squaring
     // Apply depth multiplier to wow and flutter amounts
-    wowAmount_     = amt * depthMultiplier_;
-    wowRateHz_     = 0.25f + amt * 0.25f;         // 0.25 – 0.5 Hz (slow, musical wow)
-    flutterAmount_ = amt * depthMultiplier_;
-    flutterRateHz_ = 2.0f + amt * 3.0f;           // 2.0 – 5.0 Hz (audible flutter)
+    wowAmount_     = amt * depthMultiplier_ * wowDepthScale_;
+    wowRateHz_     = wowRateMinHz_ + amt * (wowRateMaxHz_ - wowRateMinHz_);
+    flutterAmount_ = amt * depthMultiplier_ * flutterDepthScale_;
+    flutterRateHz_ = flutterRateMinHz_ + amt * (flutterRateMaxHz_ - flutterRateMinHz_);
 }
 
 float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float index)

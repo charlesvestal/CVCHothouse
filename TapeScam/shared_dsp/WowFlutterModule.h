@@ -12,6 +12,9 @@ class WowFlutterModule
 
     // Set depth multiplier for tape age/condition (1.0 = normal)
     void SetDepthMultiplier(float multiplier);
+    void SetModeParameters(float wowDepthScale, float flutterDepthScale,
+                           float wowRateMinHz, float wowRateMaxHz,
+                           float flutterRateMinHz, float flutterRateMaxHz);
 
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
@@ -37,6 +40,12 @@ class WowFlutterModule
     float wowRateHz_    = 0.1f;
     float flutterAmount_= 0.0f;
     float flutterRateHz_= 4.0f;
+    float wowDepthScale_ = 1.0f;
+    float flutterDepthScale_ = 1.0f;
+    float wowRateMinHz_ = 0.25f;
+    float wowRateMaxHz_ = 0.5f;
+    float flutterRateMinHz_ = 2.0f;
+    float flutterRateMaxHz_ = 5.0f;
 
     // Actual modulated rates/depths (updated at slow rate, not per sample)
     float wowRateL_actual_ = 0.1f;
@@ -111,4 +120,3 @@ class WowFlutterModule
     float NextRandCentered();
     float TriangleWave(float phase);  // phase in 0-1 range
 };
-
