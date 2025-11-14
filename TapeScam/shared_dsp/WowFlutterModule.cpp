@@ -27,10 +27,14 @@ void WowFlutterModule::Init(float sampleRate)
     flutterAmount_ = 0.0f;
     flutterRateHz_ = 6.0f;
 
-    wowPhaseL_ = wowPhaseR_ = 0.0f;
-    fltPhaseL_ = fltPhaseR_ = 0.0f;
+    wowPhaseL_ = 0.0f;
+    wowPhaseR_ = 0.25f;  // 90° offset for wider stereo motion
+    fltPhaseL_ = 0.0f;
+    fltPhaseR_ = 0.33f;  // ~120° offset
     driftL_ = driftR_ = 0.0f;
     flutterJitL_ = flutterJitR_ = 0.0f;
+    wowNoiseStateL_ = wowNoiseStateR_ = 0.0f;
+    flutterNoiseStateL_ = flutterNoiseStateR_ = 0.0f;
 
     delayBufSize_ = kMaxDelaySamples;
     delayBufL_.reset(new float[delayBufSize_]);
@@ -89,8 +93,8 @@ void WowFlutterModule::SetDepthMultiplier(float multiplier)
         wowRandomnessFactor_ = 0.4f;
         flutterTurbulenceFactor_ = 0.2f;
     } else {
-        wowRandomnessFactor_ = 0.7f;
-        flutterTurbulenceFactor_ = 0.4f;
+        wowRandomnessFactor_ = 0.75f;
+        flutterTurbulenceFactor_ = 0.45f;
     }
 }
 
@@ -106,18 +110,46 @@ void WowFlutterModule::SetModeParameters(float wowDepthScale, float flutterDepth
     flutterRateMaxHz_ = std::max(flutterRateMinHz_, flutterRateMaxHz);
 }
 
+void WowFlutterModule::SetBaselineMotion(float ageAmount, float speedAmount)
+{
+    const float ageAmt = Clamp(ageAmount, 0.0f, 1.0f);
+    const float speedAmt = Clamp(speedAmount, 0.0f, 1.0f);
+
+    baseAgeDriftDepthSec_ = ageAmt * kMaxAgeDriftDepthSec;
+    baseSpeedFlutterDepthSec_ = speedAmt * kMaxSpeedFlutterDepthSec;
+
+    ageDriftAlpha_ = (baseAgeDriftDepthSec_ > 0.0f)
+        ? (0.0002f + 0.0012f * ageAmt)
+        : 0.0f;
+
+    flutterDriftAlpha_ = (baseSpeedFlutterDepthSec_ > 0.0f)
+        ? (0.0008f + 0.0025f * speedAmt)
+        : 0.0f;
+}
+
+void WowFlutterModule::SetMaxDeviation(float seconds)
+{
+    maxDevSec_ = Clamp(seconds, 0.0008f, 0.05f);
+}
+
 void WowFlutterModule::UpdateControls()
 {
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
 
     const float amt = smoothedAmount_;
+    depthShape_ = amt * amt;
+    const float depthBlendWow = 0.15f + 0.85f * depthShape_;
+    const float depthBlendFlutter = 0.10f + 0.90f * depthShape_;
 
-    // Linear control for clarity - no squaring
-    // Apply depth multiplier to wow and flutter amounts
-    wowAmount_     = amt * depthMultiplier_ * wowDepthScale_;
-    wowRateHz_     = wowRateMinHz_ + amt * (wowRateMaxHz_ - wowRateMinHz_);
-    flutterAmount_ = amt * depthMultiplier_ * flutterDepthScale_;
-    flutterRateHz_ = flutterRateMinHz_ + amt * (flutterRateMaxHz_ - flutterRateMinHz_);
+    wowAmount_     = depthBlendWow * depthMultiplier_ * wowDepthScale_;
+    flutterAmount_ = depthBlendFlutter * depthMultiplier_ * flutterDepthScale_;
+
+    const float rateShape = std::sqrt(std::max(amt, 0.0f));
+    wowRateHz_ = wowRateMinHz_ + (wowRateMaxHz_ - wowRateMinHz_) * rateShape;
+    flutterRateHz_ = flutterRateMinHz_ + (flutterRateMaxHz_ - flutterRateMinHz_) * rateShape;
+
+    const float targetSlew = Clamp(0.96f - 0.25f * depthShape_, 0.72f, 0.96f);
+    slewAlpha_ += (targetSlew - slewAlpha_) * 0.2f;
 }
 
 float WowFlutterModule::InterpolateLinear(const float* buf, size_t size, float index)
@@ -176,65 +208,135 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     const float baseSecR      = baseDelaySamplesR_ * invSr;
 
     // Simplified depth control - musical and clear
-    const float maxWowDepthSec = 0.008f;      // 8ms max wow (pitch wobble)
+    const float maxWowDepthSec = 0.035f;       // 35ms max wow (deeper drift)
     const float maxFlutterDepthSec = 0.002f;  // 2ms max flutter (tape speed variation)
 
     // Simple, direct modulation - no cross-modulation complexity
     wowDepthL_actual_ = maxWowDepthSec * wowAmt;
-    wowDepthR_actual_ = maxWowDepthSec * wowAmt;
+    wowDepthR_actual_ = maxWowDepthSec * wowAmt * 1.03f;
     wowRateL_actual_ = wowRateHz_;
     wowRateR_actual_ = wowRateHz_ * 1.03f;  // Slight L/R offset for width
 
     flutterDepthL_actual_ = maxFlutterDepthSec * flutterAmt;
-    flutterDepthR_actual_ = maxFlutterDepthSec * flutterAmt;
+    flutterDepthR_actual_ = maxFlutterDepthSec * flutterAmt * 0.97f;
     flutterRateL_actual_ = flutterRateHz_;
     flutterRateR_actual_ = flutterRateHz_ * 0.97f;  // Slight L/R offset
+
+    const bool ageDriftActive = (baseAgeDriftDepthSec_ > 0.0f) && (ageDriftAlpha_ > 0.0f);
+    const bool speedDriftActive = (baseSpeedFlutterDepthSec_ > 0.0f) && (flutterDriftAlpha_ > 0.0f);
+    const float wowDepthBaseL = wowDepthL_actual_;
+    const float wowDepthBaseR = wowDepthR_actual_;
+    const float flutterDepthBaseL = flutterDepthL_actual_;
+    const float flutterDepthBaseR = flutterDepthR_actual_;
 
     for(size_t i = 0; i < size; ++i)
     {
         float xL = in[0][i];
         float xR = in[1][i];
 
+        wowNoiseStateL_ += (NextRandCentered() - wowNoiseStateL_) * kWowNoiseAlpha;
+        wowNoiseStateR_ += (NextRandCentered() - wowNoiseStateR_) * kWowNoiseAlpha;
+        flutterNoiseStateL_ += (NextRandCentered() - flutterNoiseStateL_) * kFlutterNoiseAlpha;
+        flutterNoiseStateR_ += (NextRandCentered() - flutterNoiseStateR_) * kFlutterNoiseAlpha;
+
+        const float wowRateL_now = wowRateL_actual_;
+        const float wowRateR_now = wowRateR_actual_;
+        const float flutterRateL_now = flutterRateL_actual_;
+        const float flutterRateR_now = flutterRateR_actual_;
+        const float wowDepthL_now = wowDepthBaseL;
+        const float wowDepthR_now = wowDepthBaseR;
+        const float flutterDepthL_now = flutterDepthBaseL;
+        const float flutterDepthR_now = flutterDepthBaseR;
+
+        if(ageDriftActive)
+        {
+            const float shared = NextRandCentered();
+            const float slightOffset = NextRandCentered() * 0.12f;
+            const float targetL = shared * baseAgeDriftDepthSec_;
+            const float targetR = (shared + slightOffset) * baseAgeDriftDepthSec_;
+            driftL_ += (targetL - driftL_) * ageDriftAlpha_;
+            driftR_ += (targetR - driftR_) * ageDriftAlpha_;
+        }
+        else
+        {
+            driftL_ *= 0.9996f;
+            driftR_ *= 0.9996f;
+        }
+
+        if(speedDriftActive)
+        {
+            const float shared = NextRandCentered();
+            const float targetL = shared * baseSpeedFlutterDepthSec_;
+            const float targetR = (shared - 0.08f * NextRandCentered()) * baseSpeedFlutterDepthSec_;
+            const float slowAlpha = flutterDriftAlpha_ * 0.5f;
+            flutterJitL_ += (targetL - flutterJitL_) * slowAlpha;
+            flutterJitR_ += (targetR - flutterJitR_) * slowAlpha;
+        }
+        else
+        {
+            flutterJitL_ *= 0.9997f;
+            flutterJitR_ *= 0.9997f;
+        }
+
         // --- LEFT CHANNEL ---
 
         // Update wow phase
-        wowPhaseL_ += wowRateL_actual_ * invSr;
+        wowPhaseL_ += wowRateL_now * invSr;
         if(wowPhaseL_ >= 1.0f) wowPhaseL_ -= 1.0f;
 
-        // Wow waveform: pure sine
-        float wowL = std::sin(kTwoPi * wowPhaseL_);
+        // Wow waveform: sine blended with filtered noise for organic motion
+        float wowSineL = std::sin(kTwoPi * wowPhaseL_);
 
         // Update flutter phase
-        fltPhaseL_ += flutterRateL_actual_ * invSr;
+        fltPhaseL_ += flutterRateL_now * invSr;
         if(fltPhaseL_ >= 1.0f) fltPhaseL_ -= 1.0f;
 
         // Flutter waveform: pure sine
-        float flutterL = std::sin(kTwoPi * fltPhaseL_);
+        float flutterSineL = std::sin(kTwoPi * fltPhaseL_);
+
+        const float wowNoiseMixBase = Clamp(wowRandomnessFactor_, 0.0f, 0.6f);
+        const float flutterNoiseMixBase = Clamp(flutterTurbulenceFactor_, 0.0f, 0.6f);
+        const float depthSlow = std::sqrt(std::max(depthShape_, 0.0f));
+        const float wowNoiseMix = Clamp(wowNoiseMixBase * (0.10f + 0.45f * depthSlow), 0.0f, 0.65f);
+        const float flutterNoiseMix = Clamp(flutterNoiseMixBase * (0.12f + 0.45f * depthSlow), 0.0f, 0.7f);
+        const float wowSineMix = 1.0f - wowNoiseMix;
+        const float flutterSineMix = 1.0f - flutterNoiseMix;
+
+        const float wowShapeL = wowSineMix * wowSineL + wowNoiseMix * wowNoiseStateL_;
+        const float flutterShapeL = flutterSineMix * flutterSineL + flutterNoiseMix * flutterNoiseStateL_;
 
         // Combine modulations (simple addition - wow + flutter)
-        float devSecL = wowDepthL_actual_ * wowL + flutterDepthL_actual_ * flutterL;
+        const float flutterContribution = 0.4f + 0.5f * depthShape_;
+        float devSecL = driftL_;
+        devSecL += wowDepthL_now * wowShapeL;
+        devSecL += flutterDepthL_now * flutterShapeL;
+        devSecL += flutterJitL_ * flutterContribution;
 
         // --- RIGHT CHANNEL ---
 
         // Update wow phase
-        wowPhaseR_ += wowRateR_actual_ * invSr;
+        wowPhaseR_ += wowRateR_now * invSr;
         if(wowPhaseR_ >= 1.0f) wowPhaseR_ -= 1.0f;
 
-        // Wow waveform: pure sine
-        float wowR = std::sin(kTwoPi * wowPhaseR_);
+        float wowSineR = std::sin(kTwoPi * wowPhaseR_);
 
         // Update flutter phase
-        fltPhaseR_ += flutterRateR_actual_ * invSr;
+        fltPhaseR_ += flutterRateR_now * invSr;
         if(fltPhaseR_ >= 1.0f) fltPhaseR_ -= 1.0f;
 
-        // Flutter waveform: pure sine
-        float flutterR = std::sin(kTwoPi * fltPhaseR_);
+        float flutterSineR = std::sin(kTwoPi * fltPhaseR_);
+
+        const float wowShapeR = wowSineMix * wowSineR + wowNoiseMix * wowNoiseStateR_;
+        const float flutterShapeR = flutterSineMix * flutterSineR + flutterNoiseMix * flutterNoiseStateR_;
 
         // Combine modulations (simple addition - wow + flutter)
-        float devSecR = wowDepthR_actual_ * wowR + flutterDepthR_actual_ * flutterR;
+        float devSecR = driftR_;
+        devSecR += wowDepthR_now * wowShapeR;
+        devSecR += flutterDepthR_now * flutterShapeR;
+        devSecR += flutterJitR_ * flutterContribution;
 
-        devSecL = Clamp(devSecL, -kMaxDevSec, kMaxDevSec);
-        devSecR = Clamp(devSecR, -kMaxDevSec, kMaxDevSec);
+        devSecL = Clamp(devSecL, -maxDevSec_, maxDevSec_);
+        devSecR = Clamp(devSecR, -maxDevSec_, maxDevSec_);
 
         float readSecL = std::max(kMinReadSec, baseSecL + devSecL);
         float readSecR = std::max(kMinReadSec, baseSecR + devSecR);
@@ -244,7 +346,7 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
 
         // Gentle slew-rate limiter: smoothly approach target to prevent clicks
         // Lower alpha = more responsive, higher = more smoothing
-        const float slewAlpha = 0.85f;  // Light smoothing - keeps effect audible
+        const float slewAlpha = slewAlpha_;
         float smoothTargetL = slewAlpha * readStateL_ + (1.0f - slewAlpha) * targetSamplesL;
         float smoothTargetR = slewAlpha * readStateR_ + (1.0f - slewAlpha) * targetSamplesR;
 

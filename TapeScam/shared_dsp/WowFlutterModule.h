@@ -15,6 +15,10 @@ class WowFlutterModule
     void SetModeParameters(float wowDepthScale, float flutterDepthScale,
                            float wowRateMinHz, float wowRateMaxHz,
                            float flutterRateMinHz, float flutterRateMaxHz);
+    void SetBaselineMotion(float ageAmount, float speedAmount);
+    // Allows host to cap the maximum deviation of the virtual tape delay.
+    // Typical ranges: 0.003-0.005 (tape), 0.015-0.030 (pedal/vibrato).
+    void SetMaxDeviation(float seconds);
 
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
@@ -28,6 +32,7 @@ class WowFlutterModule
 
     float targetAmount_   = 0.0f;
     float smoothedAmount_ = 0.0f;
+    float depthShape_     = 0.0f;  // nonlinear depth mapping (amt^2)
 
     // Multiplier for tape age/condition
     float depthMultiplier_ = 1.0f;
@@ -46,6 +51,8 @@ class WowFlutterModule
     float wowRateMaxHz_ = 0.5f;
     float flutterRateMinHz_ = 2.0f;
     float flutterRateMaxHz_ = 5.0f;
+    float maxDevSec_ = 0.0042f;   // runtime clamp on pitch deviation
+    float slewAlpha_ = 0.9f;      // smoothing toward read target (updated with amount)
 
     // Actual modulated rates/depths (updated at slow rate, not per sample)
     float wowRateL_actual_ = 0.1f;
@@ -67,6 +74,10 @@ class WowFlutterModule
     float readStateR_   = 0.0f;
     float flutterJitL_  = 0.0f;
     float flutterJitR_  = 0.0f;
+    float wowNoiseStateL_ = 0.0f;
+    float wowNoiseStateR_ = 0.0f;
+    float flutterNoiseStateL_ = 0.0f;
+    float flutterNoiseStateR_ = 0.0f;
 
     // Flutter burst state
     float burstTimerL_ = 0.0f;
@@ -103,15 +114,24 @@ class WowFlutterModule
     float baseDelaySamplesL_ = 0.0f;
     float baseDelaySamplesR_ = 0.0f;
 
+    float baseAgeDriftDepthSec_ = 0.0f;
+    float baseSpeedFlutterDepthSec_ = 0.0f;
+    float ageDriftAlpha_ = 0.0f;
+    float flutterDriftAlpha_ = 0.0f;
+
+    static constexpr float kMaxAgeDriftDepthSec = 0.0015f;
+    static constexpr float kMaxSpeedFlutterDepthSec = 0.0006f;
+
 
     static constexpr float kAmountSmooth = 0.3f;  // Near-instant for plugin (was 0.005f hardware)
     static constexpr float kDriftSmooth  = 0.0008f;
     static constexpr float kDriftCoeff  = 0.00015f;  // 10× slower drift
     static constexpr float kDriftScale  = 0.0006f;
     static constexpr float kJitterAlpha = 0.0004f;   // 10× slower jitter (50ms time constant)
-    static constexpr float kMaxDevSec   = 0.0018f;
     static constexpr float kMaxDeltaSamples = 0.75f;
     static constexpr float kMinReadSec  = 0.0002f;
+    static constexpr float kWowNoiseAlpha = 0.00018f;
+    static constexpr float kFlutterNoiseAlpha = 0.00025f;
     uint32_t randState_ = 0x1234567u;
 
     float NextRand();
