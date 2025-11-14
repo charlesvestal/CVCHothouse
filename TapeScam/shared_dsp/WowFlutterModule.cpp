@@ -138,8 +138,19 @@ void WowFlutterModule::UpdateControls()
 
     const float amt = smoothedAmount_;
     depthShape_ = amt * amt;
-    const float depthBlendWow = 0.15f + 0.85f * depthShape_;
-    const float depthBlendFlutter = 0.10f + 0.90f * depthShape_;
+
+    if(amt <= 0.0005f)
+    {
+        wowAmount_ = 0.0f;
+        flutterAmount_ = 0.0f;
+        wowRateHz_ = wowRateMinHz_;
+        flutterRateHz_ = flutterRateMinHz_;
+        slewAlpha_ += (0.97f - slewAlpha_) * 0.2f;
+        return;
+    }
+
+    const float depthBlendWow = 0.05f + 0.95f * depthShape_;
+    const float depthBlendFlutter = 0.03f + 0.97f * depthShape_;
 
     wowAmount_     = depthBlendWow * depthMultiplier_ * wowDepthScale_;
     flutterAmount_ = depthBlendFlutter * depthMultiplier_ * flutterDepthScale_;
@@ -148,7 +159,7 @@ void WowFlutterModule::UpdateControls()
     wowRateHz_ = wowRateMinHz_ + (wowRateMaxHz_ - wowRateMinHz_) * rateShape;
     flutterRateHz_ = flutterRateMinHz_ + (flutterRateMaxHz_ - flutterRateMinHz_) * rateShape;
 
-    const float targetSlew = Clamp(0.96f - 0.25f * depthShape_, 0.72f, 0.96f);
+    const float targetSlew = Clamp(0.94f - 0.28f * depthShape_, 0.7f, 0.95f);
     slewAlpha_ += (targetSlew - slewAlpha_) * 0.2f;
 }
 

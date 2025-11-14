@@ -82,7 +82,9 @@ class GainStageModule
     };
 
     float dBToLin(float dB) const { return powf(10.0f, dB / 20.0f); }
-    float ApplyClipping(float inSample) const;
+    float ApplyOpAmpStage1(float x) const;
+    float ApplyOpAmpStage2(float x, int channel) const;
+    float ApplyClippingCore(float x, int clippingType, float softness, float hardThreshold) const;
     float SafeLimit(float v) const;
     void  ComputeFilterCoeffs();
     float InputCompensationGain(int inputType) const;
@@ -103,6 +105,11 @@ class GainStageModule
     float masterVolLin_ = 1.0f;
     float inputCompGain_ = 1.0f;
     float characterDriveScale_ = 1.0f;
+    float stage1Softness_ = 1.0f;
+    float stage1HardThreshold_ = 1.2f;
+    float stage2Softness_ = 1.2f;
+    float stage2HardThreshold_ = 0.9f;
+    float stage2Asymmetry_ = 0.05f;
     float boostFactor_ = 1.8f;
     float driveEnv_[2] = {0.0f, 0.0f};
 
@@ -197,6 +204,10 @@ class GainStageModule
 
     float bassModeOffsetDb_ = 0.0f;
     float trebleModeOffsetDb_ = 0.0f;
+    float preHpCutHz_ = 0.0f;
+    float preLpCutHz_ = 0.0f;
+    float postLpCutHz_ = 0.0f;
+    float loFiCutHz_ = 0.0f;
 
     bool  loFiEnabled_ = false;
     OnePoleLowpass loFiLowpass_[2];
@@ -208,6 +219,9 @@ class GainStageModule
     float lastTrebleSetting_ = std::numeric_limits<float>::quiet_NaN();
     int   lastToneMode_ = -1;
     bool  lastLoFiState_ = false;
+    float lastPreHpCut_ = 0.0f;
+    float lastPreLpCut_ = 0.0f;
+    float lastPostLpCut_ = 0.0f;
 
     BiquadFilter bassShelf_[2];
     BiquadFilter trebleShelf_[2];

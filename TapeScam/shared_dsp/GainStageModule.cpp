@@ -121,59 +121,57 @@ void GainStageModule::Init(float sampleRate)
 {
     sampleRate_ = sampleRate;
 
-    params_.trimGainDb    = 6.0f;
+    params_ = {};
+    params_.character   = 0.5f;
+    params_.trimGainDb  = 0.0f;
     params_.channelGainDb = 0.0f;
-    params_.masterVolDb   = 0.0f;
-    params_.bassGainDb    = 0.0f;
-    params_.trebleGainDb  = 0.0f;
-    params_.character     = 0.5f;
-    params_.inputType     = 0;
-    params_.clippingType  = 0;
-    params_.toneMode      = 0;
-    params_.debugMode     = 0;
-    params_.bypass        = false;
-    params_.boostEngage   = false;
+    params_.masterVolDb = 0.0f;
+    params_.bassGainDb  = 0.0f;
+    params_.trebleGainDb= 0.0f;
+    params_.driveNorm   = 0.0f;
+    params_.inputType   = 0;
+    params_.clippingType= 0;
+    params_.toneMode    = 0;
+    params_.debugMode   = 0;
+    params_.bypass      = false;
+    params_.boostEngage = false;
 
     pendingParams_ = params_;
     paramsDirty_   = true;
 
-    trimGainLin_    = dBToLin(params_.trimGainDb);
-    channelGainLin_ = dBToLin(params_.channelGainDb);
-    masterVolLin_   = dBToLin(params_.masterVolDb);
-    inputCompGain_  = InputCompensationGain(params_.inputType);
+    trimGainLin_    = 1.0f;
+    channelGainLin_ = 1.0f;
+    masterVolLin_   = 1.0f;
+    inputCompGain_  = 1.0f;
     characterDriveScale_ = 1.0f;
 
+    preHpCutHz_  = kMkPreHighpassHz;
+    preLpCutHz_  = kMkPreLowpassHz;
+    postLpCutHz_ = kMkPostLowpassHz;
+    loFiCutHz_   = kLoFiCutHz;
+
     for(auto& f : bassShelf_)
-    {
         f.Reset();
-        f.SetLowShelf(sampleRate_, kBassFreqHz, 0.0f);
-    }
     for(auto& f : trebleShelf_)
-    {
         f.Reset();
-        f.SetHighShelf(sampleRate_, kTrebleFreqHz, 0.0f);
-    }
     for(auto& lp : loFiLowpass_)
     {
-        lp.z = 0.0f;  // Explicit state reset
-        lp.SetCutoff(sampleRate_, kLoFiCutHz);
+        lp.z = 0.0f;
+        lp.SetCutoff(sampleRate_, loFiCutHz_);
     }
 
     for(int ch = 0; ch < 2; ++ch)
     {
         mkPreHP_[ch].Reset();
-        mkPreHP_[ch].SetHighpass(sampleRate_, kMkPreHighpassHz, 0.7071f);
         mkPreLP_[ch].Reset();
-        mkPreLP_[ch].SetLowpass(sampleRate_, kMkPreLowpassHz, 0.7071f);
         mkPostLP_[ch].Reset();
-        mkPostLP_[ch].SetLowpass(sampleRate_, kMkPostLowpassHz, 0.7071f);
         driveEnv_[ch] = 0.0f;
     }
 
     oversamplerL_.Init(sampleRate_, kOversamplePreCutHz, kOversamplePostCutHz);
     oversamplerR_.Init(sampleRate_, kOversamplePreCutHz, kOversamplePostCutHz);
 
-    ComputeFilterCoeffs();
+    UpdateControls();
 }
 
 void GainStageModule::SetPendingParams(const Params& params)
@@ -212,31 +210,52 @@ float GainStageModule::InputCompensationGain(int inputType) const
 void GainStageModule::ComputeFilterCoeffs()
 {
     const float toneFactor = ToneModeFactor(params_.toneMode);
-
     const float bassGain = (params_.bassGainDb + bassModeOffsetDb_) * toneFactor;
     const float trebleGain = (params_.trebleGainDb + trebleModeOffsetDb_) * toneFactor;
 
-    for(auto& f : bassShelf_)
+    const bool needShelves = !std::isfinite(lastBassSetting_) ||
+                             std::fabs(lastBassSetting_ - bassGain) > 1.0e-3f ||
+                             std::fabs(lastTrebleSetting_ - trebleGain) > 1.0e-3f ||
+                             lastToneMode_ != params_.toneMode;
+
+    if(needShelves)
     {
-        f.SetLowShelf(sampleRate_, kBassFreqHz, bassGain);
-    }
-    for(auto& f : trebleShelf_)
-    {
-        f.SetHighShelf(sampleRate_, kTrebleFreqHz, trebleGain);
+        for(auto& f : bassShelf_)
+            f.SetLowShelf(sampleRate_, kBassFreqHz, bassGain);
+        for(auto& f : trebleShelf_)
+            f.SetHighShelf(sampleRate_, kTrebleFreqHz, trebleGain);
+        lastBassSetting_ = bassGain;
+        lastTrebleSetting_ = trebleGain;
+        lastToneMode_ = params_.toneMode;
     }
 
-    if(loFiEnabled_)
+    const bool needPreFilters = std::fabs(lastPreHpCut_ - preHpCutHz_) > 1.0e-3f ||
+                                std::fabs(lastPreLpCut_ - preLpCutHz_) > 1.0e-3f;
+    if(needPreFilters)
+    {
+        for(int ch = 0; ch < 2; ++ch)
+        {
+            mkPreHP_[ch].SetHighpass(sampleRate_, preHpCutHz_, 0.7071f);
+            mkPreLP_[ch].SetLowpass(sampleRate_, preLpCutHz_, 0.7071f);
+        }
+        lastPreHpCut_ = preHpCutHz_;
+        lastPreLpCut_ = preLpCutHz_;
+    }
+
+    const bool needPostFilters = std::fabs(lastPostLpCut_ - postLpCutHz_) > 1.0e-3f;
+    if(needPostFilters)
+    {
+        for(int ch = 0; ch < 2; ++ch)
+            mkPostLP_[ch].SetLowpass(sampleRate_, postLpCutHz_, 0.7071f);
+        lastPostLpCut_ = postLpCutHz_;
+    }
+
+    if(loFiEnabled_ != lastLoFiState_)
     {
         for(auto& lp : loFiLowpass_)
-        {
-            lp.SetCutoff(sampleRate_, kLoFiCutHz);
-        }
+            lp.SetCutoff(sampleRate_, loFiEnabled_ ? loFiCutHz_ : 20000.0f);
+        lastLoFiState_ = loFiEnabled_;
     }
-
-    lastBassSetting_ = bassGain;
-    lastTrebleSetting_ = trebleGain;
-    lastToneMode_ = params_.toneMode;
-    lastLoFiState_ = loFiEnabled_;
 }
 
 void GainStageModule::UpdateControls()
@@ -249,84 +268,103 @@ void GainStageModule::UpdateControls()
     params_ = pendingParams_;
     paramsDirty_ = false;
 
-    float drive = params_.driveNorm;
-    if(drive < 0.0f) drive = 0.0f;
-    if(drive > 1.0f) drive = 1.0f;
-    params_.driveNorm    = drive;
-    params_.trimGainDb   = drive * 20.0f;
-    params_.channelGainDb = drive * 20.0f;
-    params_.character    = drive;
-    params_.masterVolDb  = 0.0f;
-    params_.bassGainDb   = 0.0f;
-    params_.trebleGainDb = 0.0f;
-    params_.inputType    = 0;
-    params_.clippingType = 0;
-    params_.toneMode     = 0;
+    params_.trimGainDb    = Clamp(params_.trimGainDb,   -40.0f, 40.0f);
+    params_.channelGainDb = Clamp(params_.channelGainDb,-40.0f, 40.0f);
+    params_.masterVolDb   = Clamp(params_.masterVolDb,  -24.0f, 12.0f);
+    params_.bassGainDb    = Clamp(params_.bassGainDb,   -18.0f, 18.0f);
+    params_.trebleGainDb  = Clamp(params_.trebleGainDb, -18.0f, 18.0f);
+    params_.driveNorm     = Clamp(params_.driveNorm,     0.0f, 1.0f);
+    params_.character     = Clamp(params_.character,     0.0f, 1.0f);
+    params_.inputType     = std::clamp(params_.inputType, 0, 2);
+    params_.clippingType  = std::clamp(params_.clippingType, 0, 2);
+    params_.toneMode      = std::clamp(params_.toneMode, 0, 2);
+    params_.debugMode     = std::max(params_.debugMode, 0);
 
-    trimGainLin_    = dBToLin(params_.trimGainDb);
-    channelGainLin_ = dBToLin(params_.channelGainDb);
-    // Apply headroom adjustment to master volume
-    masterVolLin_   = dBToLin(headroomAdjustmentDb_);
-    inputCompGain_  = 1.0f;
+    trimGainLin_    = dBToLin(params_.trimGainDb + headroomAdjustmentDb_);
+    channelGainLin_ = dBToLin(params_.channelGainDb + headroomAdjustmentDb_);
+    masterVolLin_   = dBToLin(params_.masterVolDb);
+    inputCompGain_  = InputCompensationGain(params_.inputType);
 
-    bassModeOffsetDb_   = 0.0f;
-    trebleModeOffsetDb_ = 0.0f;
-    characterDriveScale_ = 1.0f;
-    loFiEnabled_ = false;
+    characterDriveScale_ = 0.8f + 1.2f * params_.character;
+    stage1Softness_      = 0.8f + 0.4f * (1.0f - params_.character);
+    stage1HardThreshold_ = 1.35f - 0.15f * params_.character;
+    stage2Softness_      = 1.05f + 1.1f * params_.character;
+    stage2HardThreshold_ = 0.95f - 0.35f * params_.character;
+    stage2Asymmetry_     = 0.02f + 0.08f * params_.character;
 
-    lastBassSetting_ = std::numeric_limits<float>::quiet_NaN();
-    lastTrebleSetting_ = std::numeric_limits<float>::quiet_NaN();
-    lastToneMode_ = -1;
-    lastLoFiState_ = true;
+    switch(params_.toneMode)
+    {
+        case 1: // Standard
+            bassModeOffsetDb_   = 0.5f;
+            trebleModeOffsetDb_ = -0.5f;
+            preHpCutHz_  = kMkPreHighpassHz;
+            preLpCutHz_  = kMkPreLowpassHz * 0.9f;
+            postLpCutHz_ = 14000.0f;
+            loFiCutHz_   = 8500.0f;
+            break;
+        case 2: // Lo-Fi / Slow
+            bassModeOffsetDb_   = 1.5f;
+            trebleModeOffsetDb_ = -3.0f;
+            preHpCutHz_  = kMkPreHighpassHz * 0.7f;
+            preLpCutHz_  = kMkPreLowpassHz * 0.65f;
+            postLpCutHz_ = 9000.0f;
+            loFiCutHz_   = 6500.0f;
+            break;
+        case 0:
+        default:
+            bassModeOffsetDb_   = 0.0f;
+            trebleModeOffsetDb_ = 0.0f;
+            preHpCutHz_  = kMkPreHighpassHz * 0.9f;
+            preLpCutHz_  = kMkPreLowpassHz * 1.1f;
+            postLpCutHz_ = 17500.0f;
+            loFiCutHz_   = 11000.0f;
+            break;
+    }
+
+    loFiEnabled_ = (params_.toneMode == 2);
 
     ComputeFilterCoeffs();
 }
 
-float GainStageModule::ApplyClipping(float inSample) const
+float GainStageModule::ApplyClippingCore(float x, int clippingType, float softness, float hardThreshold) const
 {
     const float boost = params_.boostEngage ? boostFactor_ : 1.0f;
-    const float gainFactor = 1.0f + params_.character * characterDriveScale_ * boost;
-    float v = inSample * gainFactor;
+    const float drive = 1.0f + params_.driveNorm * characterDriveScale_;
+    float v = x * drive * boost;
 
-    switch(params_.clippingType)
+    switch(clippingType)
     {
+        case 1: // hard
+            v = Clamp(v, -hardThreshold, hardThreshold);
+            break;
+        case 2: // gentle
+        {
+            const float t = tanhf(v * softness * 0.8f);
+            v = Clamp(t, -hardThreshold, hardThreshold);
+            break;
+        }
         case 0:
-        {
-            const float softFactor = softClipBase_ + params_.character * characterDriveScale_;
-            v = tanhf(v * softFactor);
-            break;
-        }
-        case 1:
-        {
-            const float threshold = std::max(kMinThreshold, hardClipBaseThreshold_ - 0.4f * params_.character * characterDriveScale_);
-            if(v > threshold)
-            {
-                v = threshold;
-            }
-            else if(v < -threshold)
-            {
-                v = -threshold;
-            }
-            break;
-        }
-        case 2:
         default:
-        {
-            const float sat = params_.character * characterDriveScale_;
-            if(sat > 0.001f)
-            {
-                const float gentle = 1.0f + 0.3f * sat;
-                v = tanhf(v * gentle);
-            }
-            v = Clamp(v, -1.2f, 1.2f);
+            v = tanhf(v * softness);
             break;
-        }
     }
 
-    const float asym = 0.02f + 0.08f * params_.character;
-    const float even = v * v;
-    v += asym * even * (v >= 0.0f ? 1.0f : -1.0f);
+    const float asymBase = 0.01f + 0.03f * params_.character;
+    v += asymBase * v * v * (v >= 0.0f ? 1.0f : -1.0f);
+    return v;
+}
 
+float GainStageModule::ApplyOpAmpStage1(float x) const
+{
+    const int stageType = (params_.clippingType == 1) ? 2 : params_.clippingType;
+    return ApplyClippingCore(x, stageType, stage1Softness_, stage1HardThreshold_);
+}
+
+float GainStageModule::ApplyOpAmpStage2(float x, int channel) const
+{
+    float v = ApplyClippingCore(x, params_.clippingType, stage2Softness_, stage2HardThreshold_);
+    const float asym = stage2Asymmetry_ * (channel == 0 ? 1.0f : -1.0f);
+    v += asym * v * v;
     return v;
 }
 
@@ -359,116 +397,83 @@ void GainStageModule::Process(const float* const* in, float** out, size_t size)
         return;
     }
 
-    const float inComp = inputCompGain_;
-    const bool skipClip = params_.debugMode >= 1;
-    const bool skipTone = params_.debugMode >= 2;
-    const bool rawTap   = params_.debugMode >= 3;
+    const bool bypassStage2 = params_.debugMode >= 1;
+    const bool bypassEq     = params_.debugMode >= 2;
+    const bool rawTap       = params_.debugMode >= 3;
+    const float inComp      = inputCompGain_;
+
+    auto processStage2 = [this, bypassStage2](float sample, int channel) -> float
+    {
+        if(bypassStage2)
+            return sample;
+
+        auto& os = (channel == 0) ? oversamplerL_ : oversamplerR_;
+        auto up = os.Upsample(sample);
+        float acc = 0.0f;
+        for(float s : up)
+        {
+            float pre = os.PreFilter(s);
+            float clipped = ApplyOpAmpStage2(pre, channel);
+            float post = os.PostFilter(clipped);
+            acc += post;
+        }
+        return acc / static_cast<float>(Oversampler4x::kFactor);
+    };
 
     for(size_t i = 0; i < size; ++i)
     {
-        float preL = in[0][i] * inComp;
-        float preR = in[1][i] * inComp;
+        float stage0L = in[0][i] * inComp;
+        float stage0R = in[1][i] * inComp;
 
-        preL *= trimGainLin_;
-        preR *= trimGainLin_;
+        float stage1InL = stage0L * trimGainLin_;
+        float stage1InR = stage0R * trimGainLin_;
 
-        preL *= channelGainLin_;
-        preR *= channelGainLin_;
+        float stage1OutL = ApplyOpAmpStage1(stage1InL);
+        float stage1OutR = ApplyOpAmpStage1(stage1InR);
 
-        const float rawPreL = preL;
-        const float rawPreR = preR;
+        driveEnv_[0] += (std::fabs(stage1OutL) - driveEnv_[0]) * kDriveEnvCoeff;
+        driveEnv_[1] += (std::fabs(stage1OutR) - driveEnv_[1]) * kDriveEnvCoeff;
 
-        driveEnv_[0] += (fabsf(preL) - driveEnv_[0]) * kDriveEnvCoeff;
-        driveEnv_[1] += (fabsf(preR) - driveEnv_[1]) * kDriveEnvCoeff;
+        float preEqL = mkPreLP_[0].Process(mkPreHP_[0].Process(stage1OutL));
+        float preEqR = mkPreLP_[1].Process(mkPreHP_[1].Process(stage1OutR));
 
-        if(!rawTap)
+        float eqL = preEqL;
+        float eqR = preEqR;
+        if(!bypassEq)
         {
-            const float dynL = 1.0f + (0.12f * params_.driveNorm) * driveEnv_[0];
-            const float dynR = 1.0f + (0.12f * params_.driveNorm) * driveEnv_[1];
-
-            float shapedPreL = mkPreHP_[0].Process(preL * dynL);
-            shapedPreL = mkPreLP_[0].Process(shapedPreL);
-            preL = 0.35f * shapedPreL + 0.65f * preL;
-
-            float shapedPreR = mkPreHP_[1].Process(preR * dynR);
-            shapedPreR = mkPreLP_[1].Process(shapedPreR);
-            preR = 0.35f * shapedPreR + 0.65f * preR;
+            eqL = trebleShelf_[0].Process(bassShelf_[0].Process(eqL));
+            eqR = trebleShelf_[1].Process(bassShelf_[1].Process(eqR));
         }
 
-        float clipL = preL;
-        float clipR = preR;
+        float stage2InL = eqL * channelGainLin_;
+        float stage2InR = eqR * channelGainLin_;
+        float stage2OutL = processStage2(stage2InL, 0);
+        float stage2OutR = processStage2(stage2InR, 1);
 
-        if(rawTap)
+        float postL = stage2OutL;
+        float postR = stage2OutR;
+
+        if(loFiEnabled_)
         {
-            clipL = skipClip ? preL : ApplyClipping(preL);
-            clipR = skipClip ? preR : ApplyClipping(preR);
-        }
-        else
-        {
-            auto upL = oversamplerL_.Upsample(preL);
-            auto upR = oversamplerR_.Upsample(preR);
-
-            float processedL = 1.0f;
-            for(float os : upL)
-            {
-                float s = oversamplerL_.PreFilter(os);
-                s = skipClip ? s : ApplyClipping(s);
-                s = oversamplerL_.PostFilter(s);
-                processedL = s;
-            }
-
-            float processedR = 1.0f;
-            for(float os : upR)
-            {
-                float s = oversamplerR_.PreFilter(os);
-                s = skipClip ? s : ApplyClipping(s);
-                s = oversamplerR_.PostFilter(s);
-                processedR = s;
-            }
-
-            clipL = mkPostLP_[0].Process(processedL);
-            clipR = mkPostLP_[1].Process(processedR);
+            postL = loFiLowpass_[0].Process(postL);
+            postR = loFiLowpass_[1].Process(postR);
         }
 
-        float toneL = clipL;
-        float toneR = clipR;
-        if(!skipTone)
-        {
-            toneL = bassShelf_[0].Process(toneL);
-            toneL = trebleShelf_[0].Process(toneL);
+        postL = mkPostLP_[0].Process(postL);
+        postR = mkPostLP_[1].Process(postR);
 
-            toneR = bassShelf_[1].Process(toneR);
-            toneR = trebleShelf_[1].Process(toneR);
-
-            if(loFiEnabled_)
-            {
-                toneL = loFiLowpass_[0].Process(toneL);
-                toneR = loFiLowpass_[1].Process(toneR);
-            }
-        }
-
-        float selectedL = rawTap ? rawPreL : toneL;
-        float selectedR = rawTap ? rawPreR : toneR;
+        float selectedL = rawTap ? stage1OutL : postL;
+        float selectedR = rawTap ? stage1OutR : postR;
 
         selectedL *= masterVolLin_;
         selectedR *= masterVolLin_;
 
-        if(rawTap)
-        {
-            selectedL = Clamp(selectedL, -1.1f, 1.1f);
-            selectedR = Clamp(selectedR, -1.1f, 1.1f);
-        }
-        else
-        {
-            selectedL = SafeLimit(selectedL);
-            selectedR = SafeLimit(selectedR);
-        }
+        selectedL = SafeLimit(selectedL);
+        selectedR = SafeLimit(selectedR);
 
-        // Denormal protection: flush very small values to zero
-        // This prevents CPU slowdown and potential L/R asymmetry from denormal handling
         constexpr float kDenormalThreshold = 1.0e-15f;
-        if(fabsf(selectedL) < kDenormalThreshold) selectedL = 0.0f;
-        if(fabsf(selectedR) < kDenormalThreshold) selectedR = 0.0f;
+        if(std::fabs(selectedL) < kDenormalThreshold) selectedL = 0.0f;
+        if(std::fabs(selectedR) < kDenormalThreshold) selectedR = 0.0f;
 
         out[0][i] = selectedL;
         out[1][i] = selectedR;
