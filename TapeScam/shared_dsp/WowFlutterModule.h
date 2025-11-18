@@ -33,6 +33,7 @@ class WowFlutterModule
     float targetAmount_   = 0.0f;
     float smoothedAmount_ = 0.0f;
     float depthShape_     = 0.0f;  // nonlinear depth mapping (amt^2)
+    float activationRamp_ = 0.0f;  // smooth enable ramp so knob at 0 stays off
 
     // Multiplier for tape age/condition
     float depthMultiplier_ = 1.0f;
@@ -132,6 +133,7 @@ class WowFlutterModule
     static constexpr float kMinReadSec  = 0.0002f;
     static constexpr float kWowNoiseAlpha = 0.00018f;
     static constexpr float kFlutterNoiseAlpha = 0.00025f;
+    static constexpr float kActivationSmooth = 0.4f;
     uint32_t randState_ = 0x1234567u;
 
     float NextRand();
