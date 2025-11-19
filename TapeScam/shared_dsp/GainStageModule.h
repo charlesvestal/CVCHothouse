@@ -22,7 +22,7 @@ class GainStageModule
         int   toneMode;
         int   debugMode;
         bool  bypass;
-        bool  boostEngage;
+        float boostAmount;  // Changed from bool boostEngage to float for smooth ramping (0.0-1.0)
     };
 
     void Init(float sampleRate);

@@ -134,7 +134,7 @@ void GainStageModule::Init(float sampleRate)
     params_.toneMode    = 0;
     params_.debugMode   = 0;
     params_.bypass      = false;
-    params_.boostEngage = false;
+    params_.boostAmount = 0.0f;
 
     pendingParams_ = params_;
     paramsDirty_   = true;
@@ -328,7 +328,8 @@ void GainStageModule::UpdateControls()
 
 float GainStageModule::ApplyClippingCore(float x, int clippingType, float softness, float hardThreshold) const
 {
-    const float boost = params_.boostEngage ? boostFactor_ : 1.0f;
+    // Smooth boost interpolation: 0.0 = no boost (1.0x), 1.0 = full boost (boostFactor_)
+    const float boost = 1.0f + params_.boostAmount * (boostFactor_ - 1.0f);
     const float drive = 1.0f + params_.driveNorm * characterDriveScale_;
     float v = x * drive * boost;
 
