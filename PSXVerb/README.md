@@ -161,3 +161,5 @@ This implementation is based on publicly documented PSX SPU behavior. See indivi
 
 ## Inspiration
 Inspired by Shirobon's lovely [PS1 Impulse Responses](https://shirobon.bandcamp.com/album/ps1-reverb-impulse-responses)
+
+Fair warning, the majority of this is vibe-coded, but provided to help whomever might find it useful.
