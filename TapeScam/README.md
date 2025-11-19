@@ -117,4 +117,4 @@ The toggle switches provide broad sonic territories, while the knobs let you dia
 
 ## Credits
 
-Based on Cleveland Music Co. Hothouse platform.
+Based on Cleveland Music Co. Hothouse platform. Fair warning, the majority of this is vibe-coded, but provided to help whomever might find it useful. 
