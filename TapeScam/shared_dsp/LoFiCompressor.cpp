@@ -1,5 +1,6 @@
 #include "LoFiCompressor.h"
 #include <cmath>
+#include <algorithm>
 
 void LoFiCompressor::Init(float sampleRate)
 {
@@ -9,13 +10,40 @@ void LoFiCompressor::Init(float sampleRate)
     envelopeR_ = 0.0f;
     smoothedGainL_ = 1.0f;
     smoothedGainR_ = 1.0f;
+    useContinuous_ = false;
     UpdateParameters();
 }
 
 void LoFiCompressor::SetMode(int mode)
 {
     mode_ = mode < 0 ? 0 : (mode > 2 ? 2 : mode);
+    useContinuous_ = false;
     UpdateParameters();
+}
+
+void LoFiCompressor::SetContinuousAmount(float amount, float makeupSpeed)
+{
+    useContinuous_ = true;
+
+    const float amt = std::clamp(amount, 0.0f, 1.0f);
+    const float speed = std::clamp(makeupSpeed, 0.0f, 1.0f);
+
+    const float attackMs = 6.0f - amt * 4.0f;          // 6→2 ms
+    const float releaseMs = 250.0f + amt * 700.0f;     // 0.25→0.95 s
+
+    attackCoeff_ = expf(-1.0f / (sampleRate_ * attackMs * 0.001f));
+    releaseCoeff_ = expf(-1.0f / (sampleRate_ * releaseMs * 0.001f));
+
+    threshold_ = 0.35f + amt * 0.4f;   // 0.35→0.75
+    ratio_ = 5.0f + amt * 15.0f;       // 5→20 upward
+    makeupGain_ = 0.85f - amt * 0.4f;  // 0.85→0.45
+
+    maxBoost_ = 3.0f + amt * 9.0f;     // 3x→12x boost
+
+    gainAttackCoeff_ = 0.15f + amt * 0.08f;  // faster duck when heavier
+
+    const float swellSeconds = 0.4f + (1.0f - speed) * 2.6f; // 0.4s→3s
+    gainReleaseCoeff_ = 1.0f - expf(-1.0f / (sampleRate_ * swellSeconds));
 }
 
 void LoFiCompressor::UpdateParameters()
@@ -40,19 +68,24 @@ void LoFiCompressor::UpdateParameters()
             threshold_ = 0.45f;  // Below 45%, start boosting
             ratio_ = 8.0f;       // 8:1 upward (nice musical boost)
             makeupGain_ = 0.7f;  // Compensate for upward gain
+            maxBoost_ = 6.0f;
             break;
 
         case 2:  // Heavy - extreme cassette deck pumping
             threshold_ = 0.65f;  // Below 65%, start boosting
             ratio_ = 18.0f;      // 18:1 upward (strong pumping)
             makeupGain_ = 0.5f;  // Compensate for heavy upward gain
+            maxBoost_ = 12.0f;
             break;
     }
+
+    gainAttackCoeff_ = 0.2f;
+    gainReleaseCoeff_ = 0.000125f;
 }
 
 float LoFiCompressor::ProcessGain(float envelope, float inputLevel)
 {
-    if(mode_ == 0) return 1.0f;  // Bypass
+    if(mode_ == 0 && !useContinuous_) return 1.0f;  // Bypass
 
     // Upward compression: boost signals below threshold
     if(envelope < threshold_)
@@ -63,7 +96,7 @@ float LoFiCompressor::ProcessGain(float envelope, float inputLevel)
 
         // Linear mapping instead of exponential to reduce artifacts
         // Moderate boost for AGC pumping effect (reduced to prevent clipping)
-        float maxBoost = mode_ == 2 ? 12.0f : 6.0f;  // Maximum gain multiplier (reduced from 20x/10x)
+        float maxBoost = useContinuous_ ? maxBoost_ : (mode_ == 2 ? 12.0f : 6.0f);
         float normalizedReduction = reduction / threshold_;  // 0.0 to 1.0
         float gain = 1.0f + (maxBoost - 1.0f) * normalizedReduction;  // Linear ramp
 
@@ -75,7 +108,7 @@ float LoFiCompressor::ProcessGain(float envelope, float inputLevel)
 
 void LoFiCompressor::Process(float* left, float* right, size_t size)
 {
-    if(mode_ == 0)
+    if(mode_ == 0 && !useContinuous_)
     {
         // Bypass - no processing
         return;
@@ -102,20 +135,16 @@ void LoFiCompressor::Process(float* left, float* right, size_t size)
         float targetGainR = ProcessGain(envelopeR_, absR);
 
         // Smooth the gain changes to prevent rapid modulation artifacts
-        // Use asymmetric smoothing: faster when gain is dropping (attack on loud signal),
-        // slower when gain is rising (release/swell on quiet signal) for dramatic pumping
-        float gainAttackCoeff = 0.2f;        // Very fast ducking when loud signal comes in
-        float gainReleaseCoeff = 0.000125f;  // GLACIALLY slow fade/swell (4× slower!)
-
-        float smoothCoeffL = (targetGainL < smoothedGainL_) ? gainAttackCoeff : gainReleaseCoeff;
-        float smoothCoeffR = (targetGainR < smoothedGainR_) ? gainAttackCoeff : gainReleaseCoeff;
+        const float smoothCoeffL = (targetGainL < smoothedGainL_) ? gainAttackCoeff_ : gainReleaseCoeff_;
+        const float smoothCoeffR = (targetGainR < smoothedGainR_) ? gainAttackCoeff_ : gainReleaseCoeff_;
 
         smoothedGainL_ += (targetGainL - smoothedGainL_) * smoothCoeffL;
         smoothedGainR_ += (targetGainR - smoothedGainR_) * smoothCoeffR;
 
         // Limit gain to prevent any possibility of clipping
         // Cap maximum gain to reasonable values to prevent distortion
-        const float maxAllowedGain = mode_ == 2 ? 15.0f : 8.0f;  // Reduced from 20x/10x
+        const float maxAllowedGain = useContinuous_ ? maxBoost_ * 1.25f
+                                                    : (mode_ == 2 ? 15.0f : 8.0f);  // Reduced from 20x/10x
         float cappedGainL = smoothedGainL_ > maxAllowedGain ? maxAllowedGain : smoothedGainL_;
         float cappedGainR = smoothedGainR_ > maxAllowedGain ? maxAllowedGain : smoothedGainR_;
 
