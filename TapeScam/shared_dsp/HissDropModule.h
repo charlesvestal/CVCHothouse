@@ -8,6 +8,7 @@ class HissDropModule
   public:
     void Init(float sampleRate, size_t numChannels);
     void SetAmount(float amount); // 0..1 noise level
+    void SetStereoBlend(float blend);
 
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
@@ -45,6 +46,8 @@ class HissDropModule
 
     uint32_t randState_ = 0x1234567u;
     std::vector<PinkState> pinkStates_;
+    std::vector<float> noiseScratch_;
 
     static inline float DbToLin(float db) { return std::pow(10.0f, db / 20.0f); }
+    float stereoBlend_ = 1.0f;
 };

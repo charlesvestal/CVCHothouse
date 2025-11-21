@@ -19,6 +19,8 @@ class WowFlutterModule
     // Allows host to cap the maximum deviation of the virtual tape delay.
     // Typical ranges: 0.003-0.005 (tape), 0.015-0.030 (pedal/vibrato).
     void SetMaxDeviation(float seconds);
+    // 0 = dual-mono (fully linked L/R), 1 = original stereo offsets
+    void SetStereoBlend(float blend);
 
     void UpdateControls();
     void Process(float** in, float** out, size_t size);
@@ -79,6 +81,7 @@ class WowFlutterModule
     float wowNoiseStateR_ = 0.0f;
     float flutterNoiseStateL_ = 0.0f;
     float flutterNoiseStateR_ = 0.0f;
+    float stereoBlend_ = 1.0f;
 
     // Flutter burst state
     float burstTimerL_ = 0.0f;

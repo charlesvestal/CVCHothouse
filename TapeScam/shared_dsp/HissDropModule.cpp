@@ -16,11 +16,17 @@ void HissDropModule::Init(float sampleRate, size_t numChannels)
 
     randState_ ^= static_cast<uint32_t>(sampleRate_);
     pinkStates_.assign(numChannels_, {});
+    noiseScratch_.assign(numChannels_, 0.0f);
 }
 
 void HissDropModule::SetAmount(float amount)
 {
     targetAmount_ = std::clamp(amount, 0.0f, 1.0f);
+}
+
+void HissDropModule::SetStereoBlend(float blend)
+{
+    stereoBlend_ = std::clamp(blend, 0.0f, 1.0f);
 }
 
 void HissDropModule::UpdateControls()
@@ -54,14 +60,18 @@ void HissDropModule::Process(float** in, float** out, size_t size)
         return;
 
     float** src = in ? in : out;
+    if(noiseScratch_.size() < numChannels_)
+        noiseScratch_.resize(numChannels_);
 
     for(size_t i = 0; i < size; ++i)
     {
+        float monoNoise = 0.0f;
+
         for(size_t ch = 0; ch < numChannels_; ++ch)
         {
             float* inBuf  = src ? src[ch] : nullptr;
             float* outBuf = out ? out[ch] : nullptr;
-            float x = inBuf ? inBuf[i] : outBuf[i];
+            const float x = inBuf ? inBuf[i] : (outBuf ? outBuf[i] : 0.0f);
 
             const float white = NextRandCentered();
             float noiseSample = white;
@@ -70,6 +80,19 @@ void HissDropModule::Process(float** in, float** out, size_t size)
                 noiseSample = (1.0f - noiseColorFactor_) * white + noiseColorFactor_ * ProcessPink(ch % pinkStates_.size(), white);
             }
 
+            noiseScratch_[ch] = noiseSample;
+            monoNoise += noiseSample;
+        }
+
+        monoNoise /= static_cast<float>(numChannels_);
+
+        for(size_t ch = 0; ch < numChannels_; ++ch)
+        {
+            float* inBuf  = src ? src[ch] : nullptr;
+            float* outBuf = out ? out[ch] : nullptr;
+            const float x = inBuf ? inBuf[i] : (outBuf ? outBuf[i] : 0.0f);
+
+            const float noiseSample = monoNoise + stereoBlend_ * (noiseScratch_[ch] - monoNoise);
             float y = x + noiseSample * hissLevelLin_;
             if(outBuf)
                 outBuf[i] = y;

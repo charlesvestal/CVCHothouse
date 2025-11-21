@@ -132,6 +132,11 @@ void WowFlutterModule::SetMaxDeviation(float seconds)
     maxDevSec_ = Clamp(seconds, 0.0008f, 0.05f);
 }
 
+void WowFlutterModule::SetStereoBlend(float blend)
+{
+    stereoBlend_ = Clamp(blend, 0.0f, 1.0f);
+}
+
 void WowFlutterModule::UpdateControls()
 {
     smoothedAmount_ += (targetAmount_ - smoothedAmount_) * kAmountSmooth;
@@ -213,8 +218,42 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     const float flutterAmt    = flutterAmount_;
 
     const float invSr         = invSampleRate_;
-    const float baseSecL      = baseDelaySamplesL_ * invSr;
-    const float baseSecR      = baseDelaySamplesR_ * invSr;
+    const float baseSecL_raw  = baseDelaySamplesL_ * invSr;
+    const float baseSecR_raw  = baseDelaySamplesR_ * invSr;
+    const float baseMidSec    = 0.5f * (baseSecL_raw + baseSecR_raw);
+    const float baseSecL      = baseMidSec + stereoBlend_ * (baseSecL_raw - baseMidSec);
+    const float baseSecR      = baseMidSec + stereoBlend_ * (baseSecR_raw - baseMidSec);
+
+    const bool bypassDelay = activationRamp_ < 1.0e-4f
+                             && baseAgeDriftDepthSec_ <= 0.0f
+                             && baseSpeedFlutterDepthSec_ <= 0.0f
+                             && wowAmt <= 1.0e-5f
+                             && flutterAmt <= 1.0e-5f;
+
+    if (bypassDelay)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            const float xL = in[0][i];
+            const float xR = in[1][i];
+            if (out)
+            {
+                out[0][i] = xL;
+                out[1][i] = xR;
+            }
+
+            delayBufL_[writeIndex_] = xL;
+            delayBufR_[writeIndex_] = xR;
+            writeIndex_++;
+            if (writeIndex_ >= delayBufSize_)
+                writeIndex_ = 0;
+        }
+        readStateL_ = baseDelaySamplesL_;
+        readStateR_ = baseDelaySamplesR_;
+        prevReadPosL_ = baseDelaySamplesL_;
+        prevReadPosR_ = baseDelaySamplesR_;
+        return;
+    }
 
     // Simplified depth control - musical and clear
     const float maxWowDepthSec = 0.035f;       // 35ms max wow (deeper drift)
@@ -343,6 +382,13 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         devSecR += wowDepthR_now * wowShapeR;
         devSecR += flutterDepthR_now * flutterShapeR;
         devSecR += flutterJitR_ * flutterContribution;
+
+        if(stereoBlend_ < 0.999f)
+        {
+            const float monoDev = 0.5f * (devSecL + devSecR);
+            devSecL = monoDev + stereoBlend_ * (devSecL - monoDev);
+            devSecR = monoDev + stereoBlend_ * (devSecR - monoDev);
+        }
 
         devSecL = Clamp(devSecL, -maxDevSec_, maxDevSec_);
         devSecR = Clamp(devSecR, -maxDevSec_, maxDevSec_);
