@@ -36,6 +36,7 @@ class WowFlutterModule
     float smoothedAmount_ = 0.0f;
     float depthShape_     = 0.0f;  // nonlinear depth mapping (amt^2)
     float activationRamp_ = 0.0f;  // smooth enable ramp so knob at 0 stays off
+    float crossfadeGain_ = 0.0f;  // per-sample smoothed dry/wet crossfade
 
     // Multiplier for tape age/condition
     float depthMultiplier_ = 1.0f;

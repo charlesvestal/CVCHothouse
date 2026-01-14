@@ -9,8 +9,11 @@
 namespace
 {
 constexpr float kTwoPi = 6.283185307179586476925286766559f;
-constexpr float kBaseDelayMsL = 12.0f;
-constexpr float kBaseDelayMsR = 15.0f;
+// Base delay must be > max deviation to allow pitch modulation in both directions.
+// Max wow deviation is 35ms * wowAmount (typically << 1.0), clamped by maxDevSec_ (~4.2ms).
+// Using 5ms base provides headroom while minimizing perceptible latency.
+constexpr float kBaseDelayMsL = 5.0f;
+constexpr float kBaseDelayMsR = 5.5f;
 // Derivative limiter: max rate of change (samples per sample)
 constexpr float kMaxDeltaSamples = 0.35f;  // Reduced from 0.9 to prevent aliasing
 }
@@ -277,10 +280,17 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
     const float flutterDepthBaseL = flutterDepthL_actual_;
     const float flutterDepthBaseR = flutterDepthR_actual_;
 
+    // Per-sample crossfade smoothing coefficient (~5ms fade at 48kHz)
+    const float crossfadeAlpha = 0.004f;
+    float crossfadeGain = crossfadeGain_;
+
     for(size_t i = 0; i < size; ++i)
     {
         float xL = in[0][i];
         float xR = in[1][i];
+
+        // Smooth crossfade gain toward activation ramp target
+        crossfadeGain += (activationRamp_ - crossfadeGain) * crossfadeAlpha;
 
         wowNoiseStateL_ += (NextRandCentered() - wowNoiseStateL_) * kWowNoiseAlpha;
         wowNoiseStateR_ += (NextRandCentered() - wowNoiseStateR_) * kWowNoiseAlpha;
@@ -478,9 +488,16 @@ void WowFlutterModule::Process(float** in, float** out, size_t size)
         if(writeIndex_ >= delayBufSize_)
             writeIndex_ = 0;
 
-        out[0][i] = delayedL;
-        out[1][i] = delayedR;
+        // Crossfade between dry and delayed signal based on smoothed activation
+        // This prevents clicks when engaging/disengaging wow/flutter
+        const float wet = crossfadeGain;
+        const float dry = 1.0f - wet;
+        out[0][i] = dry * xL + wet * delayedL;
+        out[1][i] = dry * xR + wet * delayedR;
     }
+
+    // Save crossfade state for next block
+    crossfadeGain_ = crossfadeGain;
 }
 
 float WowFlutterModule::NextRand()
