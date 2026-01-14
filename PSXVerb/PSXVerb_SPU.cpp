@@ -1,8 +1,8 @@
 // PSXVerb_SPU.cpp - Authentic PSX SPU Reverb for Daisy Seed
 // Zero-latency dry path, 24kHz internal processing with halfband resampling
 
-#include "PsxReverb.h"
-#include "PsxPreset.h"
+#include "shared_dsp/PsxReverb.h"
+#include "shared_dsp/PsxPreset.h"
 #include "hothouse.h"
 #include "daisysp.h"
 #include <cstring>
