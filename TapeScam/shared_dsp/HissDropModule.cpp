@@ -46,11 +46,14 @@ void HissDropModule::UpdateControls()
         return;
     }
 
-    // Square the amount so the lower/mid travel stays subtle and the knob only
-    // reaches its (now gentler) ceiling near the top, instead of an on/off step.
-    const float shaped = amt * amt;
-    hissLevelDb_  = kMinHissDb + shaped * (kMaxHissDb - kMinHissDb);
-    hissLevelLin_ = DbToLin(hissLevelDb_);
+    // Fade the noise gain in from TRUE silence with a steep taper on the LINEAR
+    // gain (not in dB). A dB-floor mapping can never reach zero, so the hiss
+    // stepped in at ~-60 dB the instant the knob left zero — the "notch".
+    // amt^3 approaches 0 continuously, keeping the lower half of the knob very
+    // subtle (so stacking many instances across busses stays clean) while the
+    // hiss rises smoothly over the top half; it tops out at kMaxHissDb.
+    const float maxLin = DbToLin(kMaxHissDb);
+    hissLevelLin_ = maxLin * amt * amt * amt;   // amt^3
     noiseColorFactor_ = amt;
 }
 
