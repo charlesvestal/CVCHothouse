@@ -46,7 +46,10 @@ void HissDropModule::UpdateControls()
         return;
     }
 
-    hissLevelDb_  = kMinHissDb + amt * (kMaxHissDb - kMinHissDb);
+    // Square the amount so the lower/mid travel stays subtle and the knob only
+    // reaches its (now gentler) ceiling near the top, instead of an on/off step.
+    const float shaped = amt * amt;
+    hissLevelDb_  = kMinHissDb + shaped * (kMaxHissDb - kMinHissDb);
     hissLevelLin_ = DbToLin(hissLevelDb_);
     noiseColorFactor_ = amt;
 }

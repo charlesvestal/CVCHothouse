@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>   // std::size_t (not transitively guaranteed via <cmath>)
 #include "SVFFilter.h"
 
 class TapeSatModule

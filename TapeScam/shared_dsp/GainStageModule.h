@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>   // std::size_t (not transitively guaranteed via <cmath>)
 #include <limits>
 
 class GainStageModule
@@ -30,6 +31,11 @@ class GainStageModule
 
     // Adjust headroom for tape age/condition (0dB = no change, negative = more headroom)
     void AdjustHeadroom(float headroomDb);
+
+    // Full-range mode drops the tape pre-emphasis high-pass to a near-subsonic
+    // cutoff so bass fundamentals pass through (e.g. for bass guitar / full mixes).
+    // Default (false) keeps the original tape voicing.
+    void SetFullRange(bool fullRange);
 
     void UpdateControls();
     void Process(const float* const* in, float** out, size_t size);
@@ -202,6 +208,7 @@ class GainStageModule
 
     static constexpr float kPi = 3.14159265358979323846f;
 
+    bool  fullRange_ = false;   // true => bass-preserving high-pass (see SetFullRange)
     float bassModeOffsetDb_ = 0.0f;
     float trebleModeOffsetDb_ = 0.0f;
     float preHpCutHz_ = 0.0f;

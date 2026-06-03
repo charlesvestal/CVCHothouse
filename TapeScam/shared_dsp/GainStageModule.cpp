@@ -10,6 +10,7 @@ constexpr float kTrebleFreqHz = 6000.0f;
 constexpr float kLoFiCutHz    = 10000.0f;
 constexpr float kMinThreshold = 0.2f;
 constexpr float kMkPreHighpassHz = 160.0f;
+constexpr float kMkFullRangeHighpassHz = 40.0f; // bass-preserving HP (full-range mode)
 constexpr float kMkPreLowpassHz  = 5200.0f;
 constexpr float kMkPostLowpassHz = 11000.0f;
 constexpr float kDriveEnvCoeff   = 0.02f;
@@ -187,6 +188,14 @@ void GainStageModule::AdjustHeadroom(float headroomDb)
     paramsDirty_ = true;
 }
 
+void GainStageModule::SetFullRange(bool fullRange)
+{
+    if(fullRange == fullRange_)
+        return;
+    fullRange_ = fullRange;
+    paramsDirty_ = true; // force filter recompute on next UpdateControls()
+}
+
 float GainStageModule::ToneModeFactor(int toneMode) const
 {
     switch(toneMode)
@@ -320,6 +329,10 @@ void GainStageModule::UpdateControls()
             loFiCutHz_   = 11000.0f;
             break;
     }
+
+    // Full-range mode overrides the tape pre-emphasis high-pass so bass passes through.
+    if(fullRange_)
+        preHpCutHz_ = kMkFullRangeHighpassHz;
 
     loFiEnabled_ = (params_.toneMode == 2);
 
