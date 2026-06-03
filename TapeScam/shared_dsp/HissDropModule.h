@@ -32,7 +32,7 @@ class HissDropModule
     static constexpr float kAmountSmooth    = 0.5f;
     static constexpr float kBypassThreshold = 0.0005f;
     static constexpr float kMinHissDb       = -60.0f;
-    static constexpr float kMaxHissDb       = -6.0f;
+    static constexpr float kMaxHissDb       = -30.0f;
 
     float sampleRate_      = 48000.0f;
     size_t numChannels_    = 2;
