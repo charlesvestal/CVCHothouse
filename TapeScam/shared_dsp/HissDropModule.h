@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <cmath>   // std::pow (MSVC doesn't pull it in transitively)
 
 class HissDropModule
 {

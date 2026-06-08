@@ -1,6 +1,7 @@
 #include "DropoutModule.h"
 
 #include <algorithm>
+#include <cmath>   // std::pow, std::abs (MSVC doesn't pull it in transitively)
 
 namespace
 {
